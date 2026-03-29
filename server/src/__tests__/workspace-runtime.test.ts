@@ -10,7 +10,9 @@ import {
   agents,
   companies,
   createDb,
+  executionWorkspaces,
   heartbeatRuns,
+  projects,
   workspaceRuntimeServices,
 } from "@paperclipai/db";
 import { eq } from "drizzle-orm";
@@ -880,6 +882,101 @@ describe("ensureRuntimeServicesForRun", () => {
     expect(third[0]?.id).not.toBe(first[0]?.id);
   });
 
+  it("does not reuse project-scoped shared services across different workspace launch contexts", async () => {
+    const primaryWorkspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-primary-"));
+    const worktreeWorkspaceRoot = path.join(primaryWorkspaceRoot, ".paperclip", "worktrees", "PAP-874-chat-speed-issues");
+    await fs.mkdir(worktreeWorkspaceRoot, { recursive: true });
+
+    const primaryWorkspace = buildWorkspace(primaryWorkspaceRoot);
+    const executionWorkspace: RealizedExecutionWorkspace = {
+      ...buildWorkspace(worktreeWorkspaceRoot),
+      source: "task_session",
+      strategy: "git_worktree",
+      cwd: worktreeWorkspaceRoot,
+      branchName: "PAP-874-chat-speed-issues",
+      worktreePath: worktreeWorkspaceRoot,
+    };
+    const serviceCommand =
+      "node -e \"require('node:http').createServer((req,res)=>res.end(process.env.PAPERCLIP_HOME)).listen(Number(process.env.PORT), '127.0.0.1')\"";
+    const config = {
+      workspaceRuntime: {
+        services: [
+          {
+            name: "paperclip-dev",
+            command: serviceCommand,
+            cwd: ".",
+            env: {
+              PAPERCLIP_HOME: "{{workspace.cwd}}/.paperclip/runtime-services",
+            },
+            port: { type: "auto" },
+            readiness: {
+              type: "http",
+              urlTemplate: "http://127.0.0.1:{{port}}",
+              timeoutSec: 10,
+              intervalMs: 100,
+            },
+            expose: {
+              type: "url",
+              urlTemplate: "http://127.0.0.1:{{port}}",
+            },
+            lifecycle: "shared",
+            reuseScope: "project_workspace",
+            stopPolicy: {
+              type: "on_run_finish",
+            },
+          },
+        ],
+      },
+    };
+
+    const primaryRunId = "run-project-workspace";
+    const executionRunId = "run-execution-workspace";
+    leasedRunIds.add(primaryRunId);
+    leasedRunIds.add(executionRunId);
+
+    const primaryServices = await ensureRuntimeServicesForRun({
+      runId: primaryRunId,
+      agent: {
+        id: "agent-1",
+        name: "Codex Coder",
+        companyId: "company-1",
+      },
+      issue: null,
+      workspace: primaryWorkspace,
+      config,
+      adapterEnv: {},
+    });
+
+    const executionServices = await ensureRuntimeServicesForRun({
+      runId: executionRunId,
+      agent: {
+        id: "agent-1",
+        name: "Codex Coder",
+        companyId: "company-1",
+      },
+      issue: null,
+      workspace: executionWorkspace,
+      executionWorkspaceId: "execution-workspace-1",
+      config,
+      adapterEnv: {},
+    });
+
+    expect(primaryServices).toHaveLength(1);
+    expect(executionServices).toHaveLength(1);
+    expect(primaryServices[0]?.reused).toBe(false);
+    expect(executionServices[0]?.reused).toBe(false);
+    expect(executionServices[0]?.id).not.toBe(primaryServices[0]?.id);
+    expect(executionServices[0]?.executionWorkspaceId).toBe("execution-workspace-1");
+    expect(executionServices[0]?.cwd).toBe(worktreeWorkspaceRoot);
+    expect(executionServices[0]?.url).not.toBe(primaryServices[0]?.url);
+
+    const primaryResponse = await fetch(primaryServices[0]!.url!);
+    expect(await primaryResponse.text()).toBe(path.join(primaryWorkspaceRoot, ".paperclip", "runtime-services"));
+
+    const executionResponse = await fetch(executionServices[0]!.url!);
+    expect(await executionResponse.text()).toBe(path.join(worktreeWorkspaceRoot, ".paperclip", "runtime-services"));
+  });
+
   it("does not leak parent Paperclip instance env into runtime service commands", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-env-"));
     const workspace = buildWorkspace(workspaceRoot);
@@ -1089,6 +1186,8 @@ describeEmbeddedPostgres("workspace runtime startup reconciliation", () => {
 
   afterEach(async () => {
     await db.delete(workspaceRuntimeServices);
+    await db.delete(executionWorkspaces);
+    await db.delete(projects);
     await db.delete(heartbeatRuns);
     await db.delete(agents);
     await db.delete(companies);
@@ -1200,6 +1299,127 @@ describeEmbeddedPostgres("workspace runtime startup reconciliation", () => {
     });
 
     await expect(fetch(service!.url!)).rejects.toThrow();
+  });
+
+  it("persists controlled execution workspace stops as stopped", async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-stop-persisted-"));
+    const companyId = randomUUID();
+    const agentId = randomUUID();
+    const projectId = randomUUID();
+    const runId = randomUUID();
+    const executionWorkspaceId = randomUUID();
+
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Paperclip",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    await db.insert(agents).values({
+      id: agentId,
+      companyId,
+      name: "Codex Coder",
+      role: "engineer",
+      status: "active",
+      adapterType: "codex_local",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions: {},
+    });
+    await db.insert(projects).values({
+      id: projectId,
+      companyId,
+      name: "Runtime stop test",
+      status: "active",
+    });
+    await db.insert(executionWorkspaces).values({
+      id: executionWorkspaceId,
+      companyId,
+      projectId,
+      mode: "isolated_workspace",
+      strategyType: "git_worktree",
+      name: "Execution workspace stop test",
+      status: "active",
+      cwd: workspaceRoot,
+      providerType: "local_fs",
+      providerRef: workspaceRoot,
+    });
+    await db.insert(heartbeatRuns).values({
+      id: runId,
+      companyId,
+      agentId,
+      invocationSource: "manual",
+      status: "running",
+      startedAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const workspace = {
+      ...buildWorkspace(workspaceRoot),
+      projectId: null,
+      workspaceId: null,
+    };
+    leasedRunIds.add(runId);
+
+    const services = await ensureRuntimeServicesForRun({
+      db,
+      runId,
+      agent: {
+        id: agentId,
+        name: "Codex Coder",
+        companyId,
+      },
+      issue: null,
+      workspace,
+      executionWorkspaceId,
+      config: {
+        workspaceRuntime: {
+          services: [
+            {
+              name: "web",
+              command:
+                "node -e \"require('node:http').createServer((req,res)=>res.end('ok')).listen(Number(process.env.PORT), '127.0.0.1')\"",
+              port: { type: "auto" },
+              readiness: {
+                type: "http",
+                urlTemplate: "http://127.0.0.1:{{port}}",
+                timeoutSec: 10,
+                intervalMs: 100,
+              },
+              lifecycle: "shared",
+              reuseScope: "execution_workspace",
+              stopPolicy: {
+                type: "manual",
+              },
+            },
+          ],
+        },
+      },
+      adapterEnv: {},
+    });
+
+    expect(services[0]?.url).toBeTruthy();
+
+    await stopRuntimeServicesForExecutionWorkspace({
+      db,
+      executionWorkspaceId,
+      workspaceCwd: workspace.cwd,
+    });
+    await releaseRuntimeServicesForRun(runId);
+    leasedRunIds.delete(runId);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    await expect(fetch(services[0]!.url!)).rejects.toThrow();
+
+    const persisted = await db
+      .select()
+      .from(workspaceRuntimeServices)
+      .where(eq(workspaceRuntimeServices.id, services[0]!.id))
+      .then((rows) => rows[0] ?? null);
+
+    expect(persisted?.status).toBe("stopped");
+    expect(persisted?.healthStatus).toBe("unknown");
+    expect(persisted?.stoppedAt).toBeTruthy();
   });
 });
 

@@ -914,6 +914,88 @@ function buildTemplateData(input: {
   };
 }
 
+function renderRuntimeServiceEnv(input: {
+  envConfig: Record<string, unknown>;
+  templateData: ReturnType<typeof buildTemplateData>;
+}) {
+  const rendered: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input.envConfig)) {
+    if (typeof value !== "string") continue;
+    rendered[key] = renderTemplate(value, input.templateData);
+  }
+  return rendered;
+}
+
+function resolveRuntimeServiceReuseIdentity(input: {
+  service: Record<string, unknown>;
+  workspace: RealizedExecutionWorkspace;
+  agent: ExecutionWorkspaceAgentRef;
+  issue: ExecutionWorkspaceIssueRef | null;
+  adapterEnv: Record<string, string>;
+  scopeType: RuntimeServiceRef["scopeType"];
+  scopeId: string | null;
+}): {
+  serviceName: string;
+  lifecycle: RuntimeServiceRef["lifecycle"];
+  command: string;
+  serviceCwd: string;
+  envConfig: Record<string, unknown>;
+  envFingerprint: string;
+  explicitPort: number;
+  identityPort: number | null;
+  reuseKey: string | null;
+} {
+  const serviceName = asString(input.service.name, "service");
+  const lifecycle = asString(input.service.lifecycle, "shared") === "ephemeral" ? "ephemeral" : "shared";
+  const command = asString(input.service.command, "");
+  const serviceCwdTemplate = asString(input.service.cwd, ".");
+  const portConfig = parseObject(input.service.port);
+  const envConfig = parseObject(input.service.env);
+  const explicitPort = asNumber(portConfig.value, asNumber(input.service.port, 0));
+  const identityPort = explicitPort > 0 ? explicitPort : null;
+  const templateData = buildTemplateData({
+    workspace: input.workspace,
+    agent: input.agent,
+    issue: input.issue,
+    adapterEnv: input.adapterEnv,
+    port: identityPort,
+  });
+  const serviceCwd = resolveConfiguredPath(renderTemplate(serviceCwdTemplate, templateData), input.workspace.cwd);
+  const renderedEnv = renderRuntimeServiceEnv({
+    envConfig,
+    templateData,
+  });
+  const envFingerprint = createHash("sha256").update(stableStringify(renderedEnv)).digest("hex");
+  const reuseKey =
+    lifecycle === "shared"
+      ? createHash("sha256")
+          .update(
+            stableStringify({
+              scopeType: input.scopeType,
+              scopeId: input.scopeId,
+              serviceName,
+              command,
+              cwd: serviceCwd,
+              port: identityPort,
+              env: renderedEnv,
+            }),
+          )
+          .digest("hex")
+      : null;
+
+  return {
+    serviceName,
+    lifecycle,
+    command,
+    serviceCwd,
+    envConfig,
+    envFingerprint,
+    explicitPort,
+    identityPort,
+    reuseKey,
+  };
+}
+
 function resolveServiceScopeId(input: {
   service: Record<string, unknown>;
   workspace: RealizedExecutionWorkspace;
@@ -1121,17 +1203,25 @@ async function startLocalRuntimeService(input: {
   scopeType: "project_workspace" | "execution_workspace" | "run" | "agent";
   scopeId: string | null;
 }): Promise<RuntimeServiceRecord> {
-  const serviceName = asString(input.service.name, "service");
-  const lifecycle = asString(input.service.lifecycle, "shared") === "ephemeral" ? "ephemeral" : "shared";
-  const command = asString(input.service.command, "");
+  const identity = resolveRuntimeServiceReuseIdentity({
+    service: input.service,
+    workspace: input.workspace,
+    agent: input.agent,
+    issue: input.issue,
+    adapterEnv: input.adapterEnv,
+    scopeType: input.scopeType,
+    scopeId: input.scopeId,
+  });
+  const serviceName = identity.serviceName;
+  const lifecycle = identity.lifecycle;
+  const command = identity.command;
   if (!command) throw new Error(`Runtime service "${serviceName}" is missing command`);
-  const serviceCwdTemplate = asString(input.service.cwd, ".");
   const portConfig = parseObject(input.service.port);
-  const envConfig = parseObject(input.service.env);
-  const envFingerprint = createHash("sha256").update(stableStringify(envConfig)).digest("hex");
+  const envConfig = identity.envConfig;
+  const envFingerprint = identity.envFingerprint;
   const serviceIdentityFingerprint = input.reuseKey ?? envFingerprint;
-  const explicitPort = asNumber(portConfig.value, asNumber(input.service.port, 0));
-  const identityPort = explicitPort > 0 ? explicitPort : null;
+  const explicitPort = identity.explicitPort;
+  const identityPort = identity.identityPort;
   const port =
     asString(portConfig.type, "") === "auto"
       ? await allocatePort()
@@ -1145,15 +1235,16 @@ async function startLocalRuntimeService(input: {
     adapterEnv: input.adapterEnv,
     port,
   });
-  const serviceCwd = resolveConfiguredPath(renderTemplate(serviceCwdTemplate, templateData), input.workspace.cwd);
+  const serviceCwd =
+    port === identityPort
+      ? identity.serviceCwd
+      : resolveConfiguredPath(renderTemplate(asString(input.service.cwd, "."), templateData), input.workspace.cwd);
   const env: Record<string, string> = {
     ...sanitizeRuntimeServiceBaseEnv(process.env),
     ...input.adapterEnv,
   } as Record<string, string>;
-  for (const [key, value] of Object.entries(envConfig)) {
-    if (typeof value === "string") {
-      env[key] = renderTemplate(value, templateData);
-    }
+  for (const [key, value] of Object.entries(renderRuntimeServiceEnv({ envConfig, templateData }))) {
+    env[key] = value;
   }
   if (port) {
     const portEnvKey = asString(portConfig.envKey, "PORT");
@@ -1346,8 +1437,13 @@ async function stopRuntimeService(serviceId: string) {
   if (!record) return;
   clearIdleTimer(record);
   record.status = "stopped";
+  record.healthStatus = "unknown";
   record.lastUsedAt = new Date().toISOString();
   record.stoppedAt = new Date().toISOString();
+  runtimeServicesById.delete(serviceId);
+  if (record.reuseKey && runtimeServicesByReuseKey.get(record.reuseKey) === record.id) {
+    runtimeServicesByReuseKey.delete(record.reuseKey);
+  }
   if (record.child && record.child.pid) {
     await terminateLocalService({
       pid: record.child.pid,
@@ -1361,10 +1457,6 @@ async function stopRuntimeService(serviceId: string) {
         processGroupId: record.processGroupId,
       });
     }
-  }
-  runtimeServicesById.delete(serviceId);
-  if (record.reuseKey) {
-    runtimeServicesByReuseKey.delete(record.reuseKey);
   }
   await removeLocalServiceRegistryRecord(record.serviceKey);
   await persistRuntimeServiceRecord(record.db, record);
@@ -1441,7 +1533,6 @@ export async function ensureRuntimeServicesForRun(input: {
 
   try {
     for (const service of rawServices) {
-      const lifecycle = asString(service.lifecycle, "shared") === "ephemeral" ? "ephemeral" : "shared";
       const { scopeType, scopeId } = resolveServiceScopeId({
         service,
         workspace: input.workspace,
@@ -1450,13 +1541,15 @@ export async function ensureRuntimeServicesForRun(input: {
         runId: input.runId,
         agent: input.agent,
       });
-      const envConfig = parseObject(service.env);
-      const envFingerprint = createHash("sha256").update(stableStringify(envConfig)).digest("hex");
-      const serviceName = asString(service.name, "service");
-      const reuseKey =
-        lifecycle === "shared"
-          ? [scopeType, scopeId ?? "", serviceName, envFingerprint].join(":")
-          : null;
+      const reuseKey = resolveRuntimeServiceReuseIdentity({
+        service,
+        workspace: input.workspace,
+        agent: input.agent,
+        issue: input.issue,
+        adapterEnv: input.adapterEnv,
+        scopeType,
+        scopeId,
+      }).reuseKey;
 
       if (reuseKey) {
         const existingId = runtimeServicesByReuseKey.get(reuseKey);
@@ -1520,7 +1613,6 @@ export async function startRuntimeServicesForWorkspaceControl(input: {
   const invocationId = input.invocationId ?? randomUUID();
 
   for (const service of rawServices) {
-    const lifecycle = asString(service.lifecycle, "shared") === "ephemeral" ? "ephemeral" : "shared";
     const { scopeType, scopeId } = resolveServiceScopeId({
       service,
       workspace: input.workspace,
@@ -1529,13 +1621,15 @@ export async function startRuntimeServicesForWorkspaceControl(input: {
       runId: invocationId,
       agent: input.actor,
     });
-    const envConfig = parseObject(service.env);
-    const envFingerprint = createHash("sha256").update(stableStringify(envConfig)).digest("hex");
-    const serviceName = asString(service.name, "service");
-    const reuseKey =
-      lifecycle === "shared"
-        ? [scopeType, scopeId ?? "", serviceName, envFingerprint].join(":")
-        : null;
+    const reuseKey = resolveRuntimeServiceReuseIdentity({
+      service,
+      workspace: input.workspace,
+      agent: input.actor,
+      issue: input.issue,
+      adapterEnv: input.adapterEnv,
+      scopeType,
+      scopeId,
+    }).reuseKey;
 
     if (reuseKey) {
       const existingId = runtimeServicesByReuseKey.get(reuseKey);
