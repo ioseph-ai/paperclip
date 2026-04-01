@@ -117,8 +117,8 @@ export async function createApp(
       },
       user: {
         id: req.actor.userId,
-        email: null,
-        name: req.actor.source === "local_implicit" ? "Local Board" : null,
+        email: req.actor.userEmail ?? null,
+        name: req.actor.userName ?? null,
       },
     });
   });

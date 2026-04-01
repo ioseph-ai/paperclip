@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Moon, Settings, Sun } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { BookOpen, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@/lib/router";
 import { CompanyRail } from "./CompanyRail";
 import { Sidebar } from "./Sidebar";
@@ -23,6 +23,7 @@ import { useSidebar } from "../context/SidebarContext";
 import { useTheme } from "../context/ThemeContext";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useCompanyPageMemory } from "../hooks/useCompanyPageMemory";
+import { authApi, type AuthSession } from "../api/auth";
 import { healthApi } from "../api/health";
 import { shouldSyncCompanySelectionFromRoute } from "../lib/company-selection";
 import {
@@ -33,7 +34,16 @@ import { queryKeys } from "../lib/queryKeys";
 import { cn } from "../lib/utils";
 import { NotFoundPage } from "../pages/NotFound";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Identity } from "./Identity";
 
 const INSTANCE_SETTINGS_MEMORY_KEY = "paperclip.lastInstanceSettingsPath";
 
@@ -46,7 +56,78 @@ function readRememberedInstanceSettingsPath(): string {
   }
 }
 
+function getSessionDisplayName(session: AuthSession) {
+  return session.user.name?.trim() || session.user.email?.trim() || session.user.id;
+}
+
+function FooterPrimaryAction({
+  session,
+  onSignOut,
+  signingOut,
+}: {
+  session: AuthSession | null;
+  onSignOut: () => Promise<void>;
+  signingOut: boolean;
+}) {
+  if (!session) {
+    return (
+      <a
+        href="https://docs.paperclip.ing/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium transition-colors text-foreground/80 hover:bg-accent/50 hover:text-foreground flex-1 min-w-0"
+      >
+        <BookOpen className="h-4 w-4 shrink-0" />
+        <span className="truncate">Documentation</span>
+      </a>
+    );
+  }
+
+  const displayName = getSessionDisplayName(session);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          data-testid="layout-account-menu-trigger"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/50"
+          aria-label="Open account menu"
+        >
+          <Identity name={displayName} size="sm" className="min-w-0 flex-1" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuLabel className="space-y-0.5">
+          <div className="truncate text-sm font-medium">{displayName}</div>
+          <div className="truncate text-xs font-normal text-muted-foreground">
+            {session.user.email?.trim() || session.user.id}
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <a href="https://docs.paperclip.ing/" target="_blank" rel="noopener noreferrer">
+            <BookOpen className="h-4 w-4" />
+            Documentation
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          data-testid="layout-account-menu-sign-out"
+          disabled={signingOut}
+          onClick={() => {
+            void onSignOut();
+          }}
+        >
+          <LogOut className="h-4 w-4" />
+          {signingOut ? "Signing out..." : "Sign out"}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function Layout() {
+  const queryClient = useQueryClient();
   const { sidebarOpen, setSidebarOpen, toggleSidebar, isMobile } = useSidebar();
   const { openNewIssue, openOnboarding } = useDialog();
   const { togglePanelVisible } = usePanel();
@@ -67,6 +148,7 @@ export function Layout() {
   const lastMainScrollTop = useRef(0);
   const [mobileNavVisible, setMobileNavVisible] = useState(true);
   const [instanceSettingsTarget, setInstanceSettingsTarget] = useState<string>(() => readRememberedInstanceSettingsPath());
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const nextTheme = theme === "dark" ? "light" : "dark";
   const matchedCompany = useMemo(() => {
     if (!companyPrefix) return null;
@@ -85,6 +167,25 @@ export function Layout() {
     },
     refetchIntervalInBackground: true,
   });
+  const { data: session } = useQuery({
+    queryKey: queryKeys.auth.session,
+    queryFn: () => authApi.getSession(),
+    enabled: health?.deploymentMode === "authenticated",
+    retry: false,
+  });
+
+  const handleSignOut = useCallback(async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await authApi.signOut();
+      queryClient.setQueryData(queryKeys.auth.session, null);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
+      navigate("/auth", { replace: true });
+    } finally {
+      setIsSigningOut(false);
+    }
+  }, [isSigningOut, navigate, queryClient]);
 
   useEffect(() => {
     if (companiesLoading || onboardingTriggered.current) return;
@@ -296,15 +397,7 @@ export function Layout() {
             </div>
             <div className="border-t border-r border-border px-3 py-2 bg-background">
               <div className="flex items-center gap-1">
-                <a
-                  href="https://docs.paperclip.ing/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium transition-colors text-foreground/80 hover:bg-accent/50 hover:text-foreground flex-1 min-w-0"
-                >
-                  <BookOpen className="h-4 w-4 shrink-0" />
-                  <span className="truncate">Documentation</span>
-                </a>
+                <FooterPrimaryAction session={session ?? null} onSignOut={handleSignOut} signingOut={isSigningOut} />
                 {health?.version && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -354,15 +447,7 @@ export function Layout() {
             </div>
             <div className="border-t border-r border-border px-3 py-2">
               <div className="flex items-center gap-1">
-                <a
-                  href="https://docs.paperclip.ing/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium transition-colors text-foreground/80 hover:bg-accent/50 hover:text-foreground flex-1 min-w-0"
-                >
-                  <BookOpen className="h-4 w-4 shrink-0" />
-                  <span className="truncate">Documentation</span>
-                </a>
+                <FooterPrimaryAction session={session ?? null} onSignOut={handleSignOut} signingOut={isSigningOut} />
                 {health?.version && (
                   <Tooltip>
                     <TooltipTrigger asChild>

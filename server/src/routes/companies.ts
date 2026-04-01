@@ -60,7 +60,7 @@ export function companyRoutes(db: Db, storage?: StorageService) {
   router.get("/", async (req, res) => {
     assertBoard(req);
     const result = await svc.list();
-    if (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) {
+    if (req.actor.source === "local_implicit") {
       res.json(result);
       return;
     }
@@ -70,7 +70,7 @@ export function companyRoutes(db: Db, storage?: StorageService) {
 
   router.get("/stats", async (req, res) => {
     assertBoard(req);
-    const allowed = req.actor.source === "local_implicit" || req.actor.isInstanceAdmin
+    const allowed = req.actor.source === "local_implicit"
       ? null
       : new Set(req.actor.companyIds ?? []);
     const stats = await svc.stats();

@@ -45,4 +45,34 @@ describe("assertCompanyAccess", () => {
 
     expect(() => assertCompanyAccess(req, "company-1")).toThrow("Viewer access is read-only");
   });
+
+  it("rejects signed-in instance admins without explicit company access", () => {
+    const req = makeReq({
+      method: "GET",
+      actor: {
+        type: "board",
+        userId: "admin-1",
+        source: "session",
+        isInstanceAdmin: true,
+        companyIds: [],
+        memberships: [],
+      },
+    });
+
+    expect(() => assertCompanyAccess(req, "company-1")).toThrow("User does not have access to this company");
+  });
+
+  it("allows local trusted board access without explicit membership", () => {
+    const req = makeReq({
+      method: "GET",
+      actor: {
+        type: "board",
+        userId: "local-board",
+        source: "local_implicit",
+        isInstanceAdmin: true,
+      },
+    });
+
+    expect(() => assertCompanyAccess(req, "company-1")).not.toThrow();
+  });
 });

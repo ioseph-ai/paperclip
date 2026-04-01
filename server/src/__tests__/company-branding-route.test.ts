@@ -194,3 +194,52 @@ describe("PATCH /api/companies/:companyId/branding", () => {
     expect(mockCompanyService.update).not.toHaveBeenCalled();
   });
 });
+
+describe("GET /api/companies", () => {
+  beforeEach(() => {
+    mockCompanyService.list.mockReset();
+    mockCompanyService.stats.mockReset();
+  });
+
+  it("filters list results to explicit memberships for signed-in instance admins", async () => {
+    mockCompanyService.list.mockResolvedValue([
+      { ...createCompany(), id: "company-1", issuePrefix: "PAP" },
+      { ...createCompany(), id: "company-2", issuePrefix: "OPS" },
+    ]);
+    const app = createApp({
+      type: "board",
+      userId: "admin-1",
+      source: "session",
+      isInstanceAdmin: true,
+      companyIds: ["company-1"],
+      memberships: [{ companyId: "company-1", membershipRole: "owner", status: "active" }],
+    });
+
+    const res = await request(app).get("/api/companies");
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((company: { id: string }) => company.id)).toEqual(["company-1"]);
+  });
+
+  it("filters stats results to explicit memberships for signed-in instance admins", async () => {
+    mockCompanyService.stats.mockResolvedValue({
+      "company-1": { activeAgents: 2 },
+      "company-2": { activeAgents: 1 },
+    });
+    const app = createApp({
+      type: "board",
+      userId: "admin-1",
+      source: "session",
+      isInstanceAdmin: true,
+      companyIds: ["company-1"],
+      memberships: [{ companyId: "company-1", membershipRole: "owner", status: "active" }],
+    });
+
+    const res = await request(app).get("/api/companies/stats");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      "company-1": { activeAgents: 2 },
+    });
+  });
+});

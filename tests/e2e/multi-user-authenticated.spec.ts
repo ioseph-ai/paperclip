@@ -278,6 +278,10 @@ test.describe("Multi-user: authenticated mode", () => {
 
     const company = await createCompanyForSession(page, companyName);
     const companyPrefix = company.issuePrefix ?? company.id;
+    await page.goto(`${BASE}/${companyPrefix}/dashboard`);
+    await expect(page.getByTestId("layout-account-menu-trigger")).toContainText(ownerUser.name);
+    await page.getByTestId("layout-account-menu-trigger").click();
+    await expect(page.getByText(ownerUser.email)).toBeVisible();
     const inviteUrl = await createAuthenticatedInvite(page, companyPrefix);
 
     const invited = await newPage(browser);
