@@ -88,7 +88,7 @@ export function ExecutionWorkspaceCloseDialog({
     <Dialog open={open} onOpenChange={(nextOpen) => {
       if (!closeWorkspace.isPending) onOpenChange(nextOpen);
     }}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto p-4 sm:max-w-2xl sm:p-6">
+      <DialogContent className="max-h-[85vh] overflow-x-hidden overflow-y-auto p-4 sm:max-w-2xl sm:p-6">
         <DialogHeader>
           <DialogTitle>{actionLabel}</DialogTitle>
           <DialogDescription className="break-words text-xs sm:text-sm">
@@ -107,7 +107,7 @@ export function ExecutionWorkspaceCloseDialog({
             {readinessQuery.error instanceof Error ? readinessQuery.error.message : "Failed to inspect workspace close readiness."}
           </div>
         ) : readiness ? (
-          <div className="space-y-3 sm:space-y-4">
+          <div className="min-w-0 space-y-3 sm:space-y-4">
             <div className={`rounded-xl border px-3 py-2.5 text-xs sm:px-4 sm:py-3 sm:text-sm ${readinessTone(readiness.state)}`}>
               <div className="font-medium">
                 {readiness.state === "blocked"
@@ -174,15 +174,15 @@ export function ExecutionWorkspaceCloseDialog({
             {readiness.git ? (
               <section className="space-y-2">
                 <h3 className="text-xs font-medium sm:text-sm">Git status</h3>
-                <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-xs sm:px-4 sm:py-3 sm:text-sm">
+                <div className="overflow-hidden rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-xs sm:px-4 sm:py-3 sm:text-sm">
                   <div className="grid grid-cols-2 gap-2">
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Branch</div>
-                      <div className="font-mono text-xs">{readiness.git.branchName ?? "Unknown"}</div>
+                      <div className="truncate font-mono text-xs">{readiness.git.branchName ?? "Unknown"}</div>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Base ref</div>
-                      <div className="font-mono text-xs">{readiness.git.baseRef ?? "Not set"}</div>
+                      <div className="truncate font-mono text-xs">{readiness.git.baseRef ?? "Not set"}</div>
                     </div>
                     <div>
                       <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Merged into base</div>
@@ -252,7 +252,7 @@ export function ExecutionWorkspaceCloseDialog({
                     <div className="font-medium">{action.label}</div>
                     <div className="mt-1 break-words text-muted-foreground">{action.description}</div>
                     {action.command ? (
-                      <pre className="mt-2 whitespace-pre-wrap break-all rounded-lg bg-background px-3 py-2 font-mono text-xs text-foreground">
+                      <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-background px-3 py-2 font-mono text-xs text-foreground">
                         {action.command}
                       </pre>
                     ) : null}
@@ -275,7 +275,7 @@ export function ExecutionWorkspaceCloseDialog({
             ) : null}
 
             {readiness.git?.repoRoot ? (
-              <div className="break-words text-xs text-muted-foreground">
+              <div className="overflow-hidden break-words text-xs text-muted-foreground">
                 Repo root: <span className="font-mono break-all">{readiness.git.repoRoot}</span>
                 {readiness.git.workspacePath ? (
                   <>
