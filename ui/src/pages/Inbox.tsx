@@ -39,6 +39,7 @@ import {
   shouldBlurPageSearchOnEscape,
 } from "../lib/keyboardShortcuts";
 import { EmptyState } from "../components/EmptyState";
+import { IssueGroupHeader } from "../components/IssueGroupHeader";
 import { PageSkeleton } from "../components/PageSkeleton";
 import {
   InboxIssueMetaLeading,
@@ -133,6 +134,7 @@ import {
 import { useDismissedInboxAlerts, useInboxDismissals, useReadInboxItems } from "../hooks/useInboxBadge";
 
 export { InboxIssueMetaLeading, InboxIssueTrailingColumns } from "../components/IssueColumns";
+export { IssueGroupHeader as InboxGroupHeader } from "../components/IssueGroupHeader";
 type SectionKey =
   | "work_items"
   | "alerts";
@@ -149,47 +151,6 @@ type InboxGroupedSection = {
   childrenByIssueId: Map<string, Issue[]>;
   isArchivedSearch: boolean;
 };
-
-export function InboxGroupHeader({
-  label,
-  collapsible = false,
-  collapsed = false,
-  onToggle,
-}: {
-  label: string;
-  collapsible?: boolean;
-  collapsed?: boolean;
-  onToggle?: () => void;
-}) {
-  if (collapsible) {
-    return (
-      <button
-        type="button"
-        className="flex w-full items-center gap-2 text-left"
-        aria-expanded={!collapsed}
-        onClick={onToggle}
-      >
-        <ChevronRight
-          className={cn("h-3.5 w-3.5 shrink-0 transition-transform", !collapsed && "rotate-90")}
-        />
-        <span className="max-w-[75vw] truncate rounded-full border border-border/70 bg-background/80 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-          {label}
-        </span>
-        <span className="h-px flex-1 bg-border/80" />
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <div className="h-px flex-1 bg-border/80" />
-      <span className="max-w-[75vw] truncate rounded-full border border-border/70 bg-background/80 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground sm:max-w-none">
-        {label}
-      </span>
-      <div className="h-px flex-1 bg-border/80" />
-    </div>
-  );
-}
 
 function buildGroupedInboxSections(
   items: InboxWorkItem[],
@@ -2173,8 +2134,7 @@ export function Inbox() {
                 let previousTimestamp = Number.POSITIVE_INFINITY;
                 return groupedSections.flatMap((group, groupIndex) => {
                   const elements: ReactNode[] = [];
-                  const mobileWorkspaceGrouping = isMobile && groupBy === "workspace";
-                  const isGroupCollapsed = mobileWorkspaceGrouping && collapsedGroupKeys.has(group.key);
+                  const isGroupCollapsed = collapsedGroupKeys.has(group.key);
                   if (group.isArchivedSearch && (groupIndex === 0 || !groupedSections[groupIndex - 1]?.isArchivedSearch)) {
                     elements.push(
                       <div
@@ -2194,15 +2154,15 @@ export function Inbox() {
                       <div
                         key={`group-${group.key}`}
                         className={cn(
-                          "border-b border-border/70 bg-muted/30 px-3 py-2 sm:px-4",
-                          groupIndex > 0 && "border-t border-border",
+                          "px-3 sm:px-4",
+                          groupIndex > 0 && "pt-2",
                         )}
                       >
-                        <InboxGroupHeader
+                        <IssueGroupHeader
                           label={group.label}
-                          collapsible={mobileWorkspaceGrouping}
+                          collapsible
                           collapsed={isGroupCollapsed}
-                          onToggle={mobileWorkspaceGrouping ? () => toggleGroupCollapse(group.key) : undefined}
+                          onToggle={() => toggleGroupCollapse(group.key)}
                         />
                       </div>,
                     );

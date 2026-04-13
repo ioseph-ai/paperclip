@@ -43,13 +43,14 @@ import {
 import { StatusIcon } from "./StatusIcon";
 import { EmptyState } from "./EmptyState";
 import { Identity } from "./Identity";
+import { IssueGroupHeader } from "./IssueGroupHeader";
 import { IssueFiltersPopover } from "./IssueFiltersPopover";
 import { IssueRow } from "./IssueRow";
 import { PageSkeleton } from "./PageSkeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { CircleDot, Plus, ArrowUpDown, Layers, Check, ChevronRight, List, Columns3, User, Search } from "lucide-react";
 import { KanbanBoard } from "./KanbanBoard";
 import { buildIssueTree, countDescendants } from "../lib/issue-tree";
@@ -696,22 +697,28 @@ export function IssuesList({
             }}
           >
             {group.label && (
-              <div className="flex items-center py-1.5 pl-1 pr-3">
-                <CollapsibleTrigger className="flex items-center gap-1.5">
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-90" />
-                  <span className="text-sm font-semibold uppercase tracking-wide">
-                    {group.label}
-                  </span>
-                </CollapsibleTrigger>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="ml-auto text-muted-foreground"
-                  onClick={() => openNewIssue(newIssueDefaults(group.key))}
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </div>
+              <IssueGroupHeader
+                label={group.label}
+                collapsible
+                collapsed={viewState.collapsedGroups.includes(group.key)}
+                onToggle={() => {
+                  updateView({
+                    collapsedGroups: viewState.collapsedGroups.includes(group.key)
+                      ? viewState.collapsedGroups.filter((k) => k !== group.key)
+                      : [...viewState.collapsedGroups, group.key],
+                  });
+                }}
+                trailing={(
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground"
+                    onClick={() => openNewIssue(newIssueDefaults(group.key))}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                )}
+              />
             )}
             <CollapsibleContent>
               {(() => {
