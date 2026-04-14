@@ -836,7 +836,7 @@ export function IssuesList({
                                 >
                                   <PopoverTrigger asChild>
                                     <button
-                                      className="flex w-[180px] shrink-0 items-center overflow-hidden rounded-md px-2 py-1 transition-colors hover:bg-accent/50"
+                                      className="flex w-full shrink-0 items-center overflow-hidden rounded-md px-2 py-1 transition-colors hover:bg-accent/50"
                                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                     >
                                       {issue.assigneeAgentId && agentName(issue.assigneeAgentId) ? (
