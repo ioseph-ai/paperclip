@@ -7,6 +7,7 @@ export { assetService } from "./assets.js";
 export { documentService, extractLegacyPlanBody } from "./documents.js";
 export { projectService } from "./projects.js";
 export { issueService, type IssueFilters } from "./issues.js";
+export { missionService } from "./missions.js";
 export { issueApprovalService } from "./issue-approvals.js";
 export { goalService } from "./goals.js";
 export { activityService, type ActivityFilters } from "./activity.js";

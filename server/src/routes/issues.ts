@@ -10,6 +10,7 @@ import {
   createIssueWorkProductSchema,
   createIssueLabelSchema,
   checkoutIssueSchema,
+  decomposeMissionSchema,
   createIssueSchema,
   feedbackTargetTypeSchema,
   feedbackTraceStatusSchema,
@@ -39,6 +40,7 @@ import {
   instanceSettingsService,
   issueApprovalService,
   issueService,
+  missionService,
   documentService,
   logActivity,
   projectService,
@@ -309,6 +311,7 @@ export function issueRoutes(
   const executionWorkspacesSvc = executionWorkspaceService(db);
   const workProductsSvc = workProductService(db);
   const documentsSvc = documentService(db);
+  const missionsSvc = missionService(db);
   const routinesSvc = routineService(db);
   const feedbackExportService = opts?.feedbackExportService;
   const upload = multer({
@@ -846,6 +849,55 @@ export function issueRoutes(
     assertCompanyAccess(req, issue.companyId);
     const workProducts = await workProductsSvc.listForIssue(issue.id);
     res.json(workProducts);
+  });
+
+  router.post("/issues/:id/mission/decompose", validate(decomposeMissionSchema), async (req, res) => {
+    const id = req.params.id as string;
+    const issue = await svc.getById(id);
+    if (!issue) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
+    assertCompanyAccess(req, issue.companyId);
+    if (req.actor.type === "agent") {
+      if (!req.actor.agentId) throw forbidden("Agent authentication required");
+      if (issue.assigneeAgentId !== req.actor.agentId && issue.createdByAgentId !== req.actor.agentId) {
+        throw forbidden("Agents can only decompose missions they created or are assigned to");
+      }
+    }
+
+    const actor = getActorInfo(req);
+    const result = await missionsSvc.decompose(issue.id, {
+      actor: {
+        agentId: actor.agentId ?? null,
+        userId: actor.actorType === "user" ? actor.actorId : null,
+      },
+      dryRun: req.body.dryRun,
+    });
+
+    if (!req.body.dryRun) {
+      await logActivity(db, {
+        companyId: issue.companyId,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        agentId: actor.agentId,
+        runId: actor.runId,
+        action: "mission.decomposed",
+        entityType: "issue",
+        entityId: issue.id,
+        details: {
+          identifier: issue.identifier,
+          milestoneCount: result.milestoneCount,
+          featureCount: result.featureCount,
+          validationCount: result.validationCount,
+          fixLoopCount: result.fixLoopCount,
+          createdIssueIds: result.createdIssueIds,
+          updatedIssueIds: result.updatedIssueIds,
+        },
+      });
+    }
+
+    res.json(result);
   });
 
   router.get("/issues/:id/documents", async (req, res) => {
