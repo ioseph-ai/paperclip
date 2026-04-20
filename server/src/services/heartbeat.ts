@@ -3129,6 +3129,7 @@ export function heartbeatService(db: Db) {
       const dependencyReadiness = await issuesSvc.listDependencyReadiness(run.companyId, [issueId]);
       const unresolvedBlockerCount = dependencyReadiness.get(issueId)?.unresolvedBlockerCount ?? 0;
       if (unresolvedBlockerCount > 0) {
+        logger.debug({ runId: run.id, issueId, unresolvedBlockerCount }, "claimQueuedRun: skipping blocked run");
         return null;
       }
     }
@@ -3965,7 +3966,7 @@ export function heartbeatService(db: Db) {
     if (run.status === "queued") {
       const claimed = await claimQueuedRun(run);
       if (!claimed) {
-        // Another worker has already claimed or finalized this run.
+        // claimQueuedRun can also leave the run queued when dependencies are unresolved.
         return;
       }
       run = claimed;

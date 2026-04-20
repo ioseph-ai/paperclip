@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  activityLog,
   agents,
   agentRuntimeState,
   agentWakeupRequests,
+  companySkills,
   companies,
   createDb,
   documentRevisions,
@@ -95,6 +97,8 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
   afterEach(async () => {
     vi.clearAllMocks();
     runningProcesses.clear();
+    await db.delete(activityLog);
+    await db.delete(companySkills);
     await db.delete(issueComments);
     await db.delete(issueDocuments);
     await db.delete(documentRevisions);
