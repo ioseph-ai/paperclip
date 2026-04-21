@@ -158,6 +158,12 @@ function stringifyError(error: unknown) {
   return String(error);
 }
 
+function toIsoTimestamp(value: Date | string | null | undefined) {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return value;
+  return new Date(0).toISOString();
+}
+
 function unique<T>(values: T[]) {
   return [...new Set(values)];
 }
@@ -240,7 +246,7 @@ async function parseMissionDocuments(
           issueId: issue.id,
           key: summary.key,
           title: summary.title,
-          updatedAt: summary.updatedAt.toISOString(),
+          updatedAt: toIsoTimestamp(summary.updatedAt),
           parsed: parseMissionValidationReportDocument(document.body, { round }),
         });
       } catch (error) {

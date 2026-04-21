@@ -527,6 +527,14 @@ describe("missions plugin worker", () => {
       });
     }
 
+    const originalList = harness.ctx.issues.documents.list;
+    harness.ctx.issues.documents.list = async (...args) =>
+      (await originalList(...args)).map((summary) => ({
+        ...summary,
+        createdAt: summary.createdAt.toISOString(),
+        updatedAt: summary.updatedAt.toISOString(),
+      })) as unknown as Awaited<ReturnType<typeof originalList>>;
+
     const originalUpsert = harness.ctx.issues.documents.upsert;
     const documentUpdates: Array<{ key: string; baseRevisionId: string | null | undefined }> = [];
     harness.ctx.issues.documents.upsert = async (input) => {
