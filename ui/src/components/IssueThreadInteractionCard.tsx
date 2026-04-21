@@ -590,17 +590,31 @@ function QuestionOptionButton({
       role={selectionMode === "single" ? "radio" : "checkbox"}
       aria-checked={selected}
       className={cn(
-        "w-full rounded-2xl border px-4 py-3 text-left transition-colors outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "w-full rounded-sm border px-4 py-3 text-left transition-colors outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
         selected
-          ? "border-sky-400/70 bg-sky-50/90 shadow-[0_14px_36px_rgba(14,165,233,0.14)]"
-          : "border-border/70 bg-background/80 hover:border-sky-300/60 hover:bg-sky-50/60",
+          ? "border-sky-500/80 bg-sky-500/10 text-sky-950 dark:border-sky-400/80 dark:bg-sky-400/15 dark:text-sky-50"
+          : "border-border/70 bg-transparent text-foreground hover:border-sky-500/70 hover:bg-sky-500/10 dark:hover:border-sky-400/70 dark:hover:bg-sky-400/10",
       )}
       id={id}
       onClick={onClick}
     >
-      <div className="text-sm font-medium text-foreground">{label}</div>
+      <div
+        className={cn(
+          "text-sm font-medium",
+          selected ? "text-sky-950 dark:text-sky-50" : "text-foreground",
+        )}
+      >
+        {label}
+      </div>
       {description ? (
-        <div className="mt-1 text-sm leading-6 text-muted-foreground">
+        <div
+          className={cn(
+            "mt-1 text-sm leading-6",
+            selected
+              ? "text-sky-900/80 dark:text-sky-100/80"
+              : "text-muted-foreground",
+          )}
+        >
           {description}
         </div>
       ) : null}
