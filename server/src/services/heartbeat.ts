@@ -3762,6 +3762,26 @@ export function heartbeatService(db: Db) {
         )
       : [{ count: 0, latestAt: null }];
 
+    const issueCommentBodies = contextIssueId
+      ? await db
+        .select({ body: issueComments.body })
+        .from(issueComments)
+        .where(
+          and(
+            eq(issueComments.companyId, run.companyId),
+            eq(issueComments.issueId, contextIssueId),
+            eq(issueComments.createdByRunId, run.id),
+          ),
+        )
+        .orderBy(desc(issueComments.createdAt), desc(issueComments.id))
+        .limit(5)
+        .then((rows) => rows.reverse().map((row) => row.body))
+      : [];
+
+    const continuationSummary = contextIssueId
+      ? await getIssueContinuationSummaryDocument(db, contextIssueId)
+      : null;
+
     const [documentStats] = contextIssueId
       ? await db
         .select({
@@ -3832,6 +3852,8 @@ export function heartbeatService(db: Db) {
       runStatus: run.status,
       issue,
       resultJson: resultJson ?? run.resultJson ?? null,
+      issueCommentBodies,
+      continuationSummaryBody: continuationSummary?.body ?? null,
       stdoutExcerpt: run.stdoutExcerpt ?? null,
       stderrExcerpt: run.stderrExcerpt ?? null,
       error: run.error ?? null,
