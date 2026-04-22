@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
@@ -209,6 +209,128 @@ describeEmbeddedPostgres("issueTreeControlService", () => {
     expect(released.status).toBe("released");
     expect(released.releaseReason).toBe("operator resumed");
     expect(released.members).toHaveLength(1);
+  });
+
+  it("cancels non-terminal issue statuses and restores from the cancel snapshot", async () => {
+    const companyId = randomUUID();
+    const rootIssueId = randomUUID();
+    const runningChildId = randomUUID();
+    const todoChildId = randomUUID();
+    const doneChildId = randomUUID();
+
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Paperclip",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    await db.insert(issues).values([
+      {
+        id: rootIssueId,
+        companyId,
+        title: "Root",
+        status: "done",
+        priority: "medium",
+        createdAt: new Date("2026-04-21T10:00:00.000Z"),
+      },
+      {
+        id: runningChildId,
+        companyId,
+        parentId: rootIssueId,
+        title: "Running child",
+        status: "in_progress",
+        priority: "medium",
+        createdAt: new Date("2026-04-21T10:01:00.000Z"),
+      },
+      {
+        id: todoChildId,
+        companyId,
+        parentId: rootIssueId,
+        title: "Todo child",
+        status: "todo",
+        priority: "medium",
+        createdAt: new Date("2026-04-21T10:02:00.000Z"),
+      },
+      {
+        id: doneChildId,
+        companyId,
+        parentId: rootIssueId,
+        title: "Done child",
+        status: "done",
+        priority: "medium",
+        createdAt: new Date("2026-04-21T10:03:00.000Z"),
+      },
+    ]);
+
+    const svc = issueTreeControlService(db);
+    const cancel = await svc.createHold(companyId, rootIssueId, {
+      mode: "cancel",
+      reason: "bad plan",
+      actor: { actorType: "user", actorId: "board-user", userId: "board-user" },
+    });
+    expect(cancel.preview.issues.map((issue) => [issue.id, issue.skipped, issue.skipReason])).toEqual([
+      [rootIssueId, true, "terminal_status"],
+      [runningChildId, false, null],
+      [todoChildId, false, null],
+      [doneChildId, true, "terminal_status"],
+    ]);
+
+    const cancelled = await svc.cancelIssueStatusesForHold(companyId, rootIssueId, cancel.hold.id);
+    expect(cancelled.updatedIssueIds.sort()).toEqual([runningChildId, todoChildId].sort());
+
+    const afterCancel = await db
+      .select({ id: issues.id, status: issues.status })
+      .from(issues)
+      .where(inArray(issues.id, [runningChildId, todoChildId, doneChildId]));
+    expect(Object.fromEntries(afterCancel.map((issue) => [issue.id, issue.status]))).toMatchObject({
+      [runningChildId]: "cancelled",
+      [todoChildId]: "cancelled",
+      [doneChildId]: "done",
+    });
+
+    await db
+      .update(issues)
+      .set({ status: "blocked", cancelledAt: null, updatedAt: new Date() })
+      .where(eq(issues.id, todoChildId));
+
+    const restorePreview = await svc.preview(companyId, rootIssueId, { mode: "restore" });
+    expect(restorePreview.issues.map((issue) => [issue.id, issue.skipped, issue.skipReason])).toEqual([
+      [rootIssueId, true, "not_cancelled"],
+      [runningChildId, false, null],
+      [todoChildId, true, "changed_after_cancel"],
+      [doneChildId, true, "not_cancelled"],
+    ]);
+    expect(restorePreview.warnings.map((warning) => warning.code)).toContain("restore_conflicts_present");
+
+    const restore = await svc.createHold(companyId, rootIssueId, {
+      mode: "restore",
+      reason: "resume useful work",
+      actor: { actorType: "user", actorId: "board-user", userId: "board-user" },
+    });
+    const restored = await svc.restoreIssueStatusesForHold(companyId, rootIssueId, restore.hold.id, {
+      reason: "resume useful work",
+      actor: { actorType: "user", actorId: "board-user", userId: "board-user" },
+    });
+    expect(restored.updatedIssueIds).toEqual([runningChildId]);
+
+    const afterRestore = await db
+      .select({ id: issues.id, status: issues.status, checkoutRunId: issues.checkoutRunId, executionRunId: issues.executionRunId })
+      .from(issues)
+      .where(inArray(issues.id, [runningChildId, todoChildId, doneChildId]));
+    expect(Object.fromEntries(afterRestore.map((issue) => [issue.id, issue.status]))).toMatchObject({
+      [runningChildId]: "todo",
+      [todoChildId]: "blocked",
+      [doneChildId]: "done",
+    });
+
+    const holds = await db
+      .select({ id: issueTreeHolds.id, mode: issueTreeHolds.mode, status: issueTreeHolds.status })
+      .from(issueTreeHolds)
+      .where(inArray(issueTreeHolds.id, [cancel.hold.id, restore.hold.id]));
+    expect(Object.fromEntries(holds.map((hold) => [hold.mode, hold.status]))).toMatchObject({
+      cancel: "released",
+      restore: "released",
+    });
   });
 
   it("blocks held descendant checkout but allows root comment course-correction checkout", async () => {

@@ -62,15 +62,16 @@ export function issueTreeControlRoutes(db: Db) {
     assertCompanyAccess(req, root.companyId);
 
     const actor = getActorInfo(req);
-    const result = await treeControlSvc.createHold(root.companyId, root.id, {
+    const actorInput = {
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId,
+      userId: actor.actorType === "user" ? actor.actorId : null,
+      runId: actor.runId,
+    };
+    let result = await treeControlSvc.createHold(root.companyId, root.id, {
       ...req.body,
-      actor: {
-        actorType: actor.actorType,
-        actorId: actor.actorId,
-        agentId: actor.agentId,
-        userId: actor.actorType === "user" ? actor.actorId : null,
-        runId: actor.runId,
-      },
+      actor: actorInput,
     });
     await logActivity(db, {
       companyId: root.companyId,
@@ -90,7 +91,7 @@ export function issueTreeControlRoutes(db: Db) {
       },
     });
 
-    if (result.hold.mode === "pause") {
+    if (result.hold.mode === "pause" || result.hold.mode === "cancel") {
       const interruptedRunIds = [...new Set(result.preview.activeRuns.map((run) => run.id))];
       for (const runId of interruptedRunIds) {
         await heartbeat.cancelRun(runId);
@@ -106,7 +107,7 @@ export function issueTreeControlRoutes(db: Db) {
           details: {
             holdId: result.hold.id,
             rootIssueId: root.id,
-            reason: "active_subtree_pause_hold",
+            reason: result.hold.mode === "pause" ? "active_subtree_pause_hold" : "subtree_cancel_operation",
           },
         });
       }
@@ -114,7 +115,9 @@ export function issueTreeControlRoutes(db: Db) {
       const cancelledWakeups = await treeControlSvc.cancelUnclaimedWakeupsForTree(
         root.companyId,
         root.id,
-        "Cancelled because an active subtree pause hold was created",
+        result.hold.mode === "pause"
+          ? "Cancelled because an active subtree pause hold was created"
+          : "Cancelled because a subtree cancel operation was applied",
       );
       for (const wakeup of cancelledWakeups) {
         await logActivity(db, {
@@ -133,6 +136,99 @@ export function issueTreeControlRoutes(db: Db) {
             previousReason: wakeup.reason,
           },
         });
+      }
+    }
+
+    if (result.hold.mode === "cancel") {
+      const statusUpdate = await treeControlSvc.cancelIssueStatusesForHold(root.companyId, root.id, result.hold.id);
+      await logActivity(db, {
+        companyId: root.companyId,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        agentId: actor.agentId,
+        runId: actor.runId,
+        action: "issue.tree_cancel_status_updated",
+        entityType: "issue",
+        entityId: root.id,
+        details: {
+          holdId: result.hold.id,
+          cancelledIssueIds: statusUpdate.updatedIssueIds,
+          cancelledIssueCount: statusUpdate.updatedIssueIds.length,
+        },
+      });
+    }
+
+    if (result.hold.mode === "restore") {
+      const statusUpdate = await treeControlSvc.restoreIssueStatusesForHold(root.companyId, root.id, result.hold.id, {
+        reason: result.hold.reason,
+        actor: actorInput,
+      });
+      if (statusUpdate.restoreHold) {
+        result = { ...result, hold: statusUpdate.restoreHold };
+      }
+      await logActivity(db, {
+        companyId: root.companyId,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        agentId: actor.agentId,
+        runId: actor.runId,
+        action: "issue.tree_restore_status_updated",
+        entityType: "issue",
+        entityId: root.id,
+        details: {
+          holdId: result.hold.id,
+          restoredIssueIds: statusUpdate.updatedIssueIds,
+          restoredIssueCount: statusUpdate.updatedIssueIds.length,
+          releasedCancelHoldIds: statusUpdate.releasedCancelHoldIds,
+        },
+      });
+
+      const wakeAgents = typeof req.body.metadata === "object"
+        && req.body.metadata !== null
+        && (req.body.metadata as Record<string, unknown>).wakeAgents === true;
+      if (wakeAgents) {
+        for (const restoredIssue of statusUpdate.updatedIssues) {
+          if (!restoredIssue.assigneeAgentId) continue;
+          const wakeRun = await heartbeat
+            .wakeup(restoredIssue.assigneeAgentId, {
+              source: "assignment",
+              triggerDetail: "system",
+              reason: "issue_tree_restored",
+              payload: {
+                issueId: restoredIssue.id,
+                rootIssueId: root.id,
+                restoreHoldId: result.hold.id,
+              },
+              requestedByActorType: actor.actorType,
+              requestedByActorId: actor.actorId,
+              contextSnapshot: {
+                issueId: restoredIssue.id,
+                taskId: restoredIssue.id,
+                wakeReason: "issue_tree_restored",
+                source: "issue.tree_restore",
+                rootIssueId: root.id,
+                restoreHoldId: result.hold.id,
+              },
+            })
+            .catch(() => null);
+          if (!wakeRun) continue;
+          await logActivity(db, {
+            companyId: root.companyId,
+            actorType: actor.actorType,
+            actorId: actor.actorId,
+            agentId: actor.agentId,
+            runId: actor.runId,
+            action: "issue.tree_restore_wakeup_requested",
+            entityType: "heartbeat_run",
+            entityId: wakeRun.id,
+            details: {
+              holdId: result.hold.id,
+              rootIssueId: root.id,
+              issueId: restoredIssue.id,
+              agentId: restoredIssue.assigneeAgentId,
+            },
+          });
+        }
       }
     }
 

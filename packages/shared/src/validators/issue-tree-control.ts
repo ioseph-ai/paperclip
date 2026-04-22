@@ -27,6 +27,7 @@ export const createIssueTreeHoldSchema = z
     mode: issueTreeControlModeSchema,
     reason: z.string().trim().min(1).max(1000).optional().nullable(),
     releasePolicy: issueTreeHoldReleasePolicySchema.optional().nullable(),
+    metadata: z.record(z.unknown()).optional().nullable(),
   })
   .strict();
 
