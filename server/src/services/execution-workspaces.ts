@@ -203,6 +203,7 @@ export function readExecutionWorkspaceConfig(metadata: Record<string, unknown> |
   if (!raw) return null;
 
   const config: ExecutionWorkspaceConfig = {
+    environmentId: readNullableString(raw.environmentId),
     provisionCommand: readNullableString(raw.provisionCommand),
     teardownCommand: readNullableString(raw.teardownCommand),
     cleanupCommand: readNullableString(raw.cleanupCommand),
@@ -226,6 +227,7 @@ export function mergeExecutionWorkspaceConfig(
 ): Record<string, unknown> | null {
   const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
   const current = readExecutionWorkspaceConfig(metadata) ?? {
+    environmentId: null,
     provisionCommand: null,
     teardownCommand: null,
     cleanupCommand: null,
@@ -240,6 +242,7 @@ export function mergeExecutionWorkspaceConfig(
   }
 
   const nextConfig: ExecutionWorkspaceConfig = {
+    environmentId: patch.environmentId !== undefined ? readNullableString(patch.environmentId) : current.environmentId,
     provisionCommand: patch.provisionCommand !== undefined ? readNullableString(patch.provisionCommand) : current.provisionCommand,
     teardownCommand: patch.teardownCommand !== undefined ? readNullableString(patch.teardownCommand) : current.teardownCommand,
     cleanupCommand: patch.cleanupCommand !== undefined ? readNullableString(patch.cleanupCommand) : current.cleanupCommand,
@@ -260,6 +263,7 @@ export function mergeExecutionWorkspaceConfig(
 
   if (hasConfig) {
     nextMetadata.config = {
+      environmentId: nextConfig.environmentId,
       provisionCommand: nextConfig.provisionCommand,
       teardownCommand: nextConfig.teardownCommand,
       cleanupCommand: nextConfig.cleanupCommand,
