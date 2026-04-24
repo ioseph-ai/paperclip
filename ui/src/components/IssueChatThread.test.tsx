@@ -69,12 +69,14 @@ vi.mock("./MarkdownEditor", () => ({
     placeholder,
     className,
     contentClassName,
+    fileDropTarget,
   }: {
     value?: string;
     onChange?: (value: string) => void;
     placeholder?: string;
     className?: string;
     contentClassName?: string;
+    fileDropTarget?: "editor" | "parent";
   }, ref) => {
     useImperativeHandle(ref, () => ({
       focus: markdownEditorFocusMock,
@@ -85,6 +87,7 @@ vi.mock("./MarkdownEditor", () => ({
         aria-label="Issue chat editor"
         data-class-name={className}
         data-content-class-name={contentClassName}
+        data-file-drop-target={fileDropTarget}
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange?.(event.target.value)}
@@ -818,6 +821,7 @@ describe("IssueChatThread", () => {
     expect(editor?.dataset.contentClassName).toContain("max-h-[28dvh]");
     expect(editor?.dataset.contentClassName).toContain("overflow-y-auto");
     expect(editor?.dataset.contentClassName).not.toContain("min-h-[72px]");
+    expect(editor?.dataset.fileDropTarget).toBe("parent");
 
     act(() => {
       root.unmount();

@@ -148,6 +148,17 @@ async function flush() {
   });
 }
 
+function createFileDragEvent(type: string) {
+  const event = new Event(type, { bubbles: true, cancelable: true }) as Event & {
+    dataTransfer: { types: string[]; files: File[]; dropEffect?: string };
+  };
+  event.dataTransfer = {
+    types: ["Files"],
+    files: [],
+  };
+  return event;
+}
+
 describe("MarkdownEditor", () => {
   let container: HTMLDivElement;
   let originalRangeRect: typeof Range.prototype.getBoundingClientRect;
@@ -319,6 +330,76 @@ describe("MarkdownEditor", () => {
       root.unmount();
     });
   });
+
+  it("shows the editor-scoped dropzone by default when files are dragged over it", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <MarkdownEditor
+          value=""
+          onChange={() => {}}
+          placeholder="Markdown body"
+          imageUploadHandler={async () => "https://example.com/image.png"}
+        />,
+      );
+    });
+
+    await flush();
+
+    const scope = container.querySelector('[data-testid="mdx-editor"]')?.parentElement as HTMLDivElement | null;
+    expect(scope).not.toBeNull();
+
+    act(() => {
+      scope?.dispatchEvent(createFileDragEvent("dragenter"));
+    });
+
+    expect(scope?.className).toContain("ring-1");
+    expect(container.textContent).toContain("Drop image to upload");
+
+    act(() => {
+      scope?.dispatchEvent(createFileDragEvent("dragleave"));
+    });
+
+    expect(scope?.className).not.toContain("ring-1");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("defers file-drop visuals to a parent container when requested", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <MarkdownEditor
+          value=""
+          onChange={() => {}}
+          placeholder="Markdown body"
+          imageUploadHandler={async () => "https://example.com/image.png"}
+          fileDropTarget="parent"
+        />,
+      );
+    });
+
+    await flush();
+
+    const scope = container.querySelector('[data-testid="mdx-editor"]')?.parentElement as HTMLDivElement | null;
+    expect(scope).not.toBeNull();
+
+    act(() => {
+      scope?.dispatchEvent(createFileDragEvent("dragenter"));
+    });
+
+    expect(scope?.className).not.toContain("ring-1");
+    expect(container.textContent).not.toContain("Drop image to upload");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("anchors the mention menu inside the visual viewport when mobile offsets are present", () => {
     expect(
       computeMentionMenuPosition(

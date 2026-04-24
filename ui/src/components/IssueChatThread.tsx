@@ -2254,6 +2254,7 @@ const IssueChatComposer = forwardRef<IssueChatComposerHandle, IssueChatComposerP
         mentions={mentions}
         onSubmit={handleSubmit}
         imageUploadHandler={onImageUpload}
+        fileDropTarget="parent"
         bordered={false}
         contentClassName="max-h-[28dvh] overflow-y-auto pr-1 text-sm scrollbar-auto-hide"
       />
@@ -2270,7 +2271,6 @@ const IssueChatComposer = forwardRef<IssueChatComposerHandle, IssueChatComposerP
             <input
               ref={attachInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
               className="hidden"
               onChange={handleAttachFile}
             />
@@ -2279,7 +2279,7 @@ const IssueChatComposer = forwardRef<IssueChatComposerHandle, IssueChatComposerP
               size="icon-sm"
               onClick={() => attachInputRef.current?.click()}
               disabled={attaching}
-              title="Attach image"
+              title="Attach file"
             >
               <Paperclip className="h-4 w-4" />
             </Button>
