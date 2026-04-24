@@ -1,4 +1,9 @@
-import type { HeartbeatRun, HeartbeatRunEvent, InstanceSchedulerHeartbeatAgent, WorkspaceOperation } from "@paperclipai/shared";
+import type {
+  HeartbeatRun,
+  HeartbeatRunEvent,
+  InstanceSchedulerHeartbeatAgent,
+  WorkspaceOperation,
+} from "@paperclipai/shared";
 import { api } from "./client";
 
 export interface RunLivenessFields {
@@ -28,6 +33,7 @@ export interface ActiveRunForIssue {
   continuationAttempt?: number;
   lastUsefulActionAt?: string | Date | null;
   nextAction?: string | null;
+  outputSilence?: HeartbeatRun["outputSilence"];
 }
 
 export interface LiveRunForIssue {
@@ -49,6 +55,15 @@ export interface LiveRunForIssue {
   continuationAttempt?: number;
   lastUsefulActionAt?: string | null;
   nextAction?: string | null;
+  outputSilence?: HeartbeatRun["outputSilence"];
+}
+
+export interface WatchdogDecisionInput {
+  runId: string;
+  decision: "snooze" | "continue" | "dismissed_false_positive";
+  evaluationIssueId?: string | null;
+  reason?: string | null;
+  snoozedUntil?: string | null;
 }
 
 export const heartbeatsApi = {
@@ -75,6 +90,13 @@ export const heartbeatsApi = {
       `/workspace-operations/${operationId}/log?offset=${encodeURIComponent(String(offset))}&limitBytes=${encodeURIComponent(String(limitBytes))}`,
     ),
   cancel: (runId: string) => api.post<void>(`/heartbeat-runs/${runId}/cancel`, {}),
+  recordWatchdogDecision: (input: WatchdogDecisionInput) =>
+    api.post(`/heartbeat-runs/${input.runId}/watchdog-decisions`, {
+      decision: input.decision,
+      evaluationIssueId: input.evaluationIssueId ?? null,
+      reason: input.reason ?? null,
+      snoozedUntil: input.snoozedUntil ?? null,
+    }),
   liveRunsForIssue: (issueId: string) =>
     api.get<LiveRunForIssue[]>(`/issues/${issueId}/live-runs`),
   activeRunForIssue: (issueId: string) =>

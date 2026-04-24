@@ -188,9 +188,11 @@ function shouldImplicitlyMoveCommentedIssueToTodoForAgent(input: {
   actorType: "agent" | "user";
   actorId: string;
 }) {
+  // Only human comments should implicitly reopen finished work.
+  // Agent-authored comments remain communicative unless reopen was explicit.
+  if (input.actorType !== "user") return false;
   if (!isClosedIssueStatus(input.issueStatus) && input.issueStatus !== "blocked") return false;
   if (typeof input.assigneeAgentId !== "string" || input.assigneeAgentId.length === 0) return false;
-  if (input.actorType === "agent" && input.actorId === input.assigneeAgentId) return false;
   return true;
 }
 

@@ -544,8 +544,8 @@ describe("IssuesList", () => {
     );
 
     await waitForAssertion(() => {
-      expect(container.querySelectorAll('[data-testid="issue-row"]')).toHaveLength(150);
-      expect(container.textContent).toContain("Rendering 150 of 220 issues");
+      expect(container.querySelectorAll('[data-testid="issue-row"]')).toHaveLength(100);
+      expect(container.textContent).toContain("Rendering 100 of 220 issues");
     });
 
     act(() => {
