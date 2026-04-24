@@ -188,10 +188,11 @@ describe("MarkdownBody", () => {
   });
 
   it("does not auto-link non-issue internal route paths", () => {
-    const html = renderMarkdown("Use /issues/new for the creation form and /api/issues for data.");
+    const html = renderMarkdown("Use /issues/new for the creation form, /issues/PAP-42extra as text, and /api/issues for data.");
 
-    expect(html).toContain("Use /issues/new for the creation form and /api/issues for data.");
+    expect(html).toContain("Use /issues/new for the creation form, /issues/PAP-42extra as text, and /api/issues for data.");
     expect(html).not.toContain('href="/issues/new"');
+    expect(html).not.toContain('href="/issues/PAP-42"');
     expect(html).not.toContain('data-mention-kind="issue"');
   });
 
