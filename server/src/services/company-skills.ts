@@ -151,6 +151,27 @@ type RuntimeSkillEntryOptions = {
 
 const skillInventoryRefreshPromises = new Map<string, Promise<void>>();
 
+function selectCompanySkillColumns() {
+  return {
+    id: companySkills.id,
+    companyId: companySkills.companyId,
+    key: companySkills.key,
+    slug: companySkills.slug,
+    name: companySkills.name,
+    description: companySkills.description,
+    markdown: companySkills.markdown,
+    sourceType: companySkills.sourceType,
+    sourceLocator: companySkills.sourceLocator,
+    sourceRef: companySkills.sourceRef,
+    trustLevel: companySkills.trustLevel,
+    compatibility: companySkills.compatibility,
+    fileInventory: companySkills.fileInventory,
+    metadata: companySkills.metadata,
+    createdAt: companySkills.createdAt,
+    updatedAt: companySkills.updatedAt,
+  };
+}
+
 const PROJECT_SCAN_DIRECTORY_ROOTS = [
   "skills",
   "skills/.curated",
@@ -1556,14 +1577,19 @@ export function companySkillService(db: Db) {
 
   async function pruneMissingLocalPathSkills(companyId: string) {
     const rows = await db
-      .select()
+      .select({
+        id: companySkills.id,
+        key: companySkills.key,
+        slug: companySkills.slug,
+        sourceType: companySkills.sourceType,
+        sourceLocator: companySkills.sourceLocator,
+      })
       .from(companySkills)
       .where(eq(companySkills.companyId, companyId));
-    const skills = rows.map((row) => toCompanySkill(row));
-    const missingIds = new Set(await findMissingLocalSkillIds(skills));
+    const missingIds = new Set(await findMissingLocalSkillIds(rows));
     if (missingIds.size === 0) return;
 
-    for (const skill of skills) {
+    for (const skill of rows) {
       if (!missingIds.has(skill.id)) continue;
       await db
         .delete(companySkills)
@@ -1631,7 +1657,7 @@ export function companySkillService(db: Db) {
   async function listFull(companyId: string): Promise<CompanySkill[]> {
     await ensureSkillInventoryCurrent(companyId);
     const rows = await db
-      .select()
+      .select(selectCompanySkillColumns())
       .from(companySkills)
       .where(eq(companySkills.companyId, companyId))
       .orderBy(asc(companySkills.name), asc(companySkills.key));
@@ -1652,7 +1678,7 @@ export function companySkillService(db: Db) {
 
   async function getById(companyId: string, id: string) {
     const row = await db
-      .select()
+      .select(selectCompanySkillColumns())
       .from(companySkills)
       .where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, id)))
       .then((rows) => rows[0] ?? null);
@@ -1661,7 +1687,7 @@ export function companySkillService(db: Db) {
 
   async function getByKey(companyId: string, key: string) {
     const row = await db
-      .select()
+      .select(selectCompanySkillColumns())
       .from(companySkills)
       .where(and(eq(companySkills.companyId, companyId), eq(companySkills.key, key)))
       .then((rows) => rows[0] ?? null);
@@ -1682,6 +1708,7 @@ export function companySkillService(db: Db) {
       urlKey: agent.urlKey,
       adapterType: agent.adapterType,
       desired: true,
+      // Runtime adapter state is intentionally omitted from this bounded metadata read.
       actualState: null,
     }));
   }
@@ -2119,7 +2146,7 @@ export function companySkillService(db: Db) {
     return skillDir;
   }
 
-  function resolveRuntimeSkillMaterializedPath(companyId: string, skill: CompanySkill) {
+  function resolveRuntimeSkillMaterializedPath(companyId: string, skill: Pick<CompanySkill, "key" | "slug">) {
     const runtimeRoot = path.resolve(resolveManagedSkillsRoot(companyId), "__runtime__");
     return path.resolve(runtimeRoot, buildSkillRuntimeName(skill.key, skill.slug));
   }

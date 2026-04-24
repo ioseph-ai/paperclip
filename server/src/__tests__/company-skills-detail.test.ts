@@ -57,7 +57,7 @@ describeEmbeddedPostgres("companySkillService.detail", () => {
   });
 
   function createTrackedDb(baseDb: ReturnType<typeof createDb>) {
-    const fullSkillListReads = vi.fn();
+    const implicitCompanySkillSelects = vi.fn();
 
     const trackedDb = new Proxy(baseDb, {
       get(target, prop, receiver) {
@@ -78,20 +78,10 @@ describeEmbeddedPostgres("companySkillService.detail", () => {
 
               return (table: unknown) => {
                 const fromResult = (builderTarget as { from: (value: unknown) => unknown }).from(table);
-                if (selection === undefined && table === companySkills) {
-                  return new Proxy(fromResult as object, {
-                    get(fromTarget, fromProp, fromReceiver) {
-                      if (fromProp === "orderBy") {
-                        return (...orderArgs: unknown[]) => {
-                          fullSkillListReads();
-                          return (fromTarget as { orderBy: (...args: unknown[]) => unknown }).orderBy(...orderArgs);
-                        };
-                      }
-
-                      const value = Reflect.get(fromTarget, fromProp, fromReceiver);
-                      return typeof value === "function" ? value.bind(fromTarget) : value;
-                    },
-                  });
+                if (table === companySkills) {
+                  if (selection === undefined) {
+                    implicitCompanySkillSelects();
+                  }
                 }
 
                 return fromResult;
@@ -104,7 +94,7 @@ describeEmbeddedPostgres("companySkillService.detail", () => {
 
     return {
       db: trackedDb as typeof baseDb,
-      fullSkillListReads,
+      implicitCompanySkillSelects,
     };
   }
 
@@ -165,7 +155,7 @@ describeEmbeddedPostgres("companySkillService.detail", () => {
     ]);
   });
 
-  it("avoids the full company skill list query when resolving detail usage", async () => {
+  it("uses explicit company skill column selections when resolving detail usage", async () => {
     const companyId = randomUUID();
     const skillId = randomUUID();
     const skillKey = `company/${companyId}/reflection-coach`;
@@ -237,6 +227,6 @@ describeEmbeddedPostgres("companySkillService.detail", () => {
         desired: true,
       }),
     ]);
-    expect(tracked.fullSkillListReads).not.toHaveBeenCalled();
+    expect(tracked.implicitCompanySkillSelects).not.toHaveBeenCalled();
   });
 });
