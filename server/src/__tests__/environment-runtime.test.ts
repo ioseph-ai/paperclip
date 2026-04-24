@@ -499,6 +499,13 @@ describeEmbeddedPostgres("environmentRuntimeService", () => {
           };
         }
         if (method === "environmentReleaseLease") {
+          expect(params.config).toEqual(fakePluginConfig);
+          expect(params.config).not.toHaveProperty("driver");
+          expect(params.config).not.toHaveProperty("executionWorkspaceMode");
+          expect(params.config).not.toHaveProperty("pluginId");
+          expect(params.config).not.toHaveProperty("pluginKey");
+          expect(params.config).not.toHaveProperty("providerMetadata");
+          expect(params.config).not.toHaveProperty("sandboxProviderPlugin");
           return undefined;
         }
         throw new Error(`Unexpected plugin method: ${method}`);

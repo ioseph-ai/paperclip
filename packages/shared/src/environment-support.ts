@@ -66,9 +66,12 @@ export function isEnvironmentDriverSupportedForAdapter(
 export function isSandboxProviderSupportedForAdapter(
   adapterType: string,
   provider: string | null | undefined,
+  additionalProviders: readonly string[] = [],
 ): boolean {
   if (!provider) return false;
-  return supportedSandboxProvidersForAdapter(adapterType).includes(provider as SandboxEnvironmentProvider);
+  return supportedSandboxProvidersForAdapter(adapterType, additionalProviders).includes(
+    provider as SandboxEnvironmentProvider,
+  );
 }
 
 export function getAdapterEnvironmentSupport(

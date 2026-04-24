@@ -300,7 +300,7 @@ function createSandboxEnvironmentDriver(
 
     return {
       provider: input.provider,
-      ...(input.lease.metadata ?? {}),
+      ...sanitizePluginSandboxConfigFromLeaseMetadata(input.lease.metadata),
     };
   }
 
@@ -577,6 +577,26 @@ function pluginDriverProviderKey(config: PluginEnvironmentConfig): string {
 
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+const INTERNAL_PLUGIN_SANDBOX_CONFIG_KEYS = new Set([
+  "driver",
+  "executionWorkspaceMode",
+  "pluginId",
+  "pluginKey",
+  "providerMetadata",
+  "sandboxProviderPlugin",
+]);
+
+function sanitizePluginSandboxConfigFromLeaseMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(metadata ?? {})) {
+    if (INTERNAL_PLUGIN_SANDBOX_CONFIG_KEYS.has(key)) continue;
+    sanitized[key] = value;
+  }
+  return sanitized;
 }
 
 function sandboxConfigForLeaseMetadata(config: SandboxEnvironmentConfig): Record<string, unknown> {
