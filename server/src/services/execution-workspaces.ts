@@ -743,6 +743,34 @@ export function executionWorkspaceService(db: Db) {
         .then((rows) => rows[0] ?? null);
       return row ? toExecutionWorkspace(row) : null;
     },
+
+    clearEnvironmentSelection: async (companyId: string, environmentId: string) => {
+      const rows = await db
+        .select({
+          id: executionWorkspaces.id,
+          metadata: executionWorkspaces.metadata,
+        })
+        .from(executionWorkspaces)
+        .where(eq(executionWorkspaces.companyId, companyId));
+
+      let cleared = 0;
+      for (const row of rows) {
+        const metadata = (row.metadata as Record<string, unknown> | null) ?? null;
+        const config = readExecutionWorkspaceConfig(metadata);
+        if (config?.environmentId !== environmentId) continue;
+
+        await db
+          .update(executionWorkspaces)
+          .set({
+            metadata: mergeExecutionWorkspaceConfig(metadata, { environmentId: null }),
+            updatedAt: new Date(),
+          })
+          .where(eq(executionWorkspaces.id, row.id));
+        cleared += 1;
+      }
+
+      return cleared;
+    },
   };
 }
 

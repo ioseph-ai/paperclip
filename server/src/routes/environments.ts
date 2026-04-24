@@ -9,7 +9,15 @@ import {
 } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
 import { validate } from "../middleware/validate.js";
-import { accessService, agentService, environmentService, logActivity } from "../services/index.js";
+import {
+  accessService,
+  agentService,
+  environmentService,
+  executionWorkspaceService,
+  issueService,
+  logActivity,
+  projectService,
+} from "../services/index.js";
 import {
   normalizeEnvironmentConfigForPersistence,
   normalizeEnvironmentConfigForProbe,
@@ -25,6 +33,9 @@ export function environmentRoutes(db: Db) {
   const agents = agentService(db);
   const access = accessService(db);
   const svc = environmentService(db);
+  const executionWorkspaces = executionWorkspaceService(db);
+  const issues = issueService(db);
+  const projects = projectService(db);
   const secrets = secretService(db);
 
   function parseObject(value: unknown): Record<string, unknown> {
@@ -299,6 +310,11 @@ export function environmentRoutes(db: Db) {
         }
       }
     }
+    await Promise.all([
+      executionWorkspaces.clearEnvironmentSelection(existing.companyId, existing.id),
+      issues.clearExecutionWorkspaceEnvironmentSelection(existing.companyId, existing.id),
+      projects.clearExecutionWorkspaceEnvironmentSelection(existing.companyId, existing.id),
+    ]);
     const removed = await svc.remove(existing.id);
     if (!removed) {
       res.status(404).json({ error: "Environment not found" });

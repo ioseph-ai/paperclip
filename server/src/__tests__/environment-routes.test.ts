@@ -23,6 +23,15 @@ const mockEnvironmentService = vi.hoisted(() => ({
   listLeases: vi.fn(),
   getLeaseById: vi.fn(),
 }));
+const mockExecutionWorkspaceService = vi.hoisted(() => ({
+  clearEnvironmentSelection: vi.fn(),
+}));
+const mockIssueService = vi.hoisted(() => ({
+  clearExecutionWorkspaceEnvironmentSelection: vi.fn(),
+}));
+const mockProjectService = vi.hoisted(() => ({
+  clearExecutionWorkspaceEnvironmentSelection: vi.fn(),
+}));
 
 const mockLogActivity = vi.hoisted(() => vi.fn());
 const mockProbeEnvironment = vi.hoisted(() => vi.fn());
@@ -36,7 +45,10 @@ vi.mock("../services/index.js", () => ({
   accessService: () => mockAccessService,
   agentService: () => mockAgentService,
   environmentService: () => mockEnvironmentService,
+  executionWorkspaceService: () => mockExecutionWorkspaceService,
+  issueService: () => mockIssueService,
   logActivity: mockLogActivity,
+  projectService: () => mockProjectService,
 }));
 
 vi.mock("../services/environment-probe.js", () => ({
@@ -108,6 +120,9 @@ describe("environment routes", () => {
     mockEnvironmentService.remove.mockReset();
     mockEnvironmentService.listLeases.mockReset();
     mockEnvironmentService.getLeaseById.mockReset();
+    mockExecutionWorkspaceService.clearEnvironmentSelection.mockReset();
+    mockIssueService.clearExecutionWorkspaceEnvironmentSelection.mockReset();
+    mockProjectService.clearExecutionWorkspaceEnvironmentSelection.mockReset();
     mockLogActivity.mockReset();
     mockProbeEnvironment.mockReset();
     mockSecretService.create.mockReset();
@@ -891,6 +906,18 @@ describe("environment routes", () => {
 
     expect(res.status).toBe(200);
     expect(mockEnvironmentService.remove).toHaveBeenCalledWith(environment.id);
+    expect(mockExecutionWorkspaceService.clearEnvironmentSelection).toHaveBeenCalledWith(
+      environment.companyId,
+      environment.id,
+    );
+    expect(mockIssueService.clearExecutionWorkspaceEnvironmentSelection).toHaveBeenCalledWith(
+      environment.companyId,
+      environment.id,
+    );
+    expect(mockProjectService.clearExecutionWorkspaceEnvironmentSelection).toHaveBeenCalledWith(
+      environment.companyId,
+      environment.id,
+    );
     expect(mockLogActivity).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -937,6 +964,18 @@ describe("environment routes", () => {
 
     expect(res.status).toBe(200);
     expect(mockSecretService.remove).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
+    expect(mockExecutionWorkspaceService.clearEnvironmentSelection).toHaveBeenCalledWith(
+      environment.companyId,
+      environment.id,
+    );
+    expect(mockIssueService.clearExecutionWorkspaceEnvironmentSelection).toHaveBeenCalledWith(
+      environment.companyId,
+      environment.id,
+    );
+    expect(mockProjectService.clearExecutionWorkspaceEnvironmentSelection).toHaveBeenCalledWith(
+      environment.companyId,
+      environment.id,
+    );
     expect(mockEnvironmentService.remove).toHaveBeenCalledWith(environment.id);
   });
 
