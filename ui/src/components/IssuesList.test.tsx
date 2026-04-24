@@ -435,6 +435,7 @@ describe("IssuesList", () => {
       expect(container.textContent).toContain("1/3 done");
       expect(container.textContent).toContain("0 in progress");
       expect(container.textContent).toContain("1 blocked");
+      expect(container.textContent).not.toContain("Done 1");
       expect(container.textContent).toContain("Next up");
       const link = container.querySelector('a[href="/issues/PAP-2"]');
       expect(link?.textContent).toContain("Implement next slice");
@@ -488,7 +489,7 @@ describe("IssuesList", () => {
       expect(rows.filter((row) => row.getAttribute("data-current-step") === "true")).toHaveLength(1);
       expect(rows.find((row) => row.textContent?.includes("Active blocker"))?.getAttribute("data-current-step")).toBe("true");
       expect(rows.find((row) => row.textContent?.includes("Done first"))?.getAttribute("data-title-class")).toContain("text-muted-foreground");
-      expect(container.textContent).toContain("blocked by PAP-3");
+      expect(container.textContent).toContain("blocked by PAP-3 · step 1");
     });
 
     act(() => {

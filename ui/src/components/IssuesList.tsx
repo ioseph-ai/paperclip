@@ -393,16 +393,6 @@ function SubIssueProgressSummaryStrip({
               />
             ))}
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {statusEntries.map(({ status, count }) => (
-              <span
-                key={status}
-                className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium", statusBadge[status])}
-              >
-                {issueStatusLabels[status]} {count}
-              </span>
-            ))}
-          </div>
         </div>
 
         <div className="min-w-0 rounded-md border border-border bg-background px-3 py-2 text-sm lg:w-72">
@@ -1290,6 +1280,9 @@ export function IssuesList({
                         const blockerIssue = issueById.get(blockerId);
                         if (!blockerIssue) return null;
                         const label = blockerIssue.identifier ?? blockerIssue.id.slice(0, 8);
+                        const blockerStep = checklistMeta.stepNumberByIssueId.get(blockerId);
+                        const blockerStepSuffix = blockerStep ? ` \u00b7 step ${blockerStep}` : "";
+                        const chipLabel = `blocked by ${label}${blockerStepSuffix}`;
                         return (
                           <button
                             key={blockerId}
@@ -1303,10 +1296,10 @@ export function IssuesList({
                               target.focus?.();
                             }}
                             className="inline-flex items-center rounded-full border border-amber-400/45 bg-amber-50/60 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100/80 dark:border-amber-300/35 dark:bg-amber-400/10 dark:text-amber-300"
-                            title={`Blocked by ${label}`}
-                            aria-label={`Blocked by ${label}`}
+                            title={chipLabel}
+                            aria-label={chipLabel}
                           >
-                            blocked by {label}
+                            {chipLabel}
                           </button>
                         );
                       })}

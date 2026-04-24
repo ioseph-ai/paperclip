@@ -78,13 +78,13 @@ export function IssueRow({
       className={cn(
         "group flex items-start gap-2 border-b border-border py-2.5 pl-2 pr-3 text-sm no-underline text-inherit transition-colors last:border-b-0 sm:items-center sm:py-2 sm:pl-1",
         selected ? "hover:bg-transparent" : "hover:bg-accent/50",
-        checklistCurrentStep ? "border-l-2 border-l-primary/40 pl-[calc(theme(spacing.2)-2px)] sm:pl-[calc(theme(spacing.1)-2px)]" : null,
+        checklistCurrentStep ? "border-l-2 border-l-primary bg-primary/5 pl-[calc(theme(spacing.2)-2px)] sm:pl-[calc(theme(spacing.1)-2px)]" : null,
         className,
       )}
     >
       {hasChecklistStep ? (
         <span
-          className="hidden w-8 shrink-0 self-center text-right font-mono text-xs text-muted-foreground sm:inline-block"
+          className="inline-block w-4 shrink-0 self-center text-right font-mono text-[10px] text-muted-foreground sm:w-8 sm:text-xs"
           aria-hidden="true"
         >
           {checklistStepNumber}.
