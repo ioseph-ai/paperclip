@@ -269,7 +269,11 @@ export function sandboxConfigFromLeaseMetadataLoose(
     return builtinProvider.configFromLeaseMetadata(metadata);
   }
 
-  return null;
+  return {
+    ...metadata,
+    provider: providerKey,
+    reuseLease: metadata.reuseLease === true,
+  } satisfies SandboxEnvironmentConfig;
 }
 
 export function findReusableSandboxProviderLeaseId(input: {

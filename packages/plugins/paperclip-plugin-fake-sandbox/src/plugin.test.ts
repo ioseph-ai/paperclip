@@ -140,4 +140,89 @@ describe("fake sandbox provider plugin", () => {
       }
     }
   });
+
+  it("includes /usr/local/bin in the default PATH when no PATH override is provided", async () => {
+    const definition = plugin.definition;
+    const harness = createEnvironmentTestHarness({
+      manifest,
+      environmentDriver: {
+        driverKey: "fake-plugin",
+        onAcquireLease: definition.onEnvironmentAcquireLease,
+        onDestroyLease: definition.onEnvironmentDestroyLease,
+        onRealizeWorkspace: definition.onEnvironmentRealizeWorkspace,
+        onExecute: definition.onEnvironmentExecute,
+      },
+    });
+    const base = {
+      driverKey: "fake-plugin",
+      companyId: "company-1",
+      environmentId: "env-1",
+      config: { image: "fake:test", reuseLease: false },
+    };
+    const lease = await harness.acquireLease({ ...base, runId: "run-1" });
+    const realized = await harness.realizeWorkspace({
+      ...base,
+      lease,
+      workspace: { mode: "isolated_workspace" },
+    });
+
+    const executed = await harness.execute({
+      ...base,
+      lease,
+      command: "sh",
+      args: ["-lc", "printf %s \"$PATH\""],
+      cwd: realized.cwd,
+      timeoutMs: 10_000,
+    });
+
+    expect(executed.stdout).toContain("/usr/local/bin");
+
+    await harness.destroyLease({
+      ...base,
+      providerLeaseId: lease.providerLeaseId,
+    });
+  });
+
+  it("escalates to SIGKILL after timeout if the child ignores SIGTERM", async () => {
+    const definition = plugin.definition;
+    const harness = createEnvironmentTestHarness({
+      manifest,
+      environmentDriver: {
+        driverKey: "fake-plugin",
+        onAcquireLease: definition.onEnvironmentAcquireLease,
+        onDestroyLease: definition.onEnvironmentDestroyLease,
+        onRealizeWorkspace: definition.onEnvironmentRealizeWorkspace,
+        onExecute: definition.onEnvironmentExecute,
+      },
+    });
+    const base = {
+      driverKey: "fake-plugin",
+      companyId: "company-1",
+      environmentId: "env-1",
+      config: { image: "fake:test", reuseLease: false },
+    };
+    const lease = await harness.acquireLease({ ...base, runId: "run-1" });
+    const realized = await harness.realizeWorkspace({
+      ...base,
+      lease,
+      workspace: { mode: "isolated_workspace" },
+    });
+
+    const executed = await harness.execute({
+      ...base,
+      lease,
+      command: "sh",
+      args: ["-lc", "trap '' TERM; while :; do sleep 1; done"],
+      cwd: realized.cwd,
+      timeoutMs: 100,
+    });
+
+    expect(executed.timedOut).toBe(true);
+    expect(executed.exitCode).toBeNull();
+
+    await harness.destroyLease({
+      ...base,
+      providerLeaseId: lease.providerLeaseId,
+    });
+  });
 });

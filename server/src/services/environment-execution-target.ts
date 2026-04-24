@@ -8,6 +8,8 @@ import { parseObject } from "../adapters/utils.js";
 import { resolveEnvironmentDriverConfigForRuntime } from "./environment-config.js";
 import type { EnvironmentRuntimeService } from "./environment-runtime.js";
 
+export const DEFAULT_SANDBOX_REMOTE_CWD = "/tmp";
+
 export async function resolveEnvironmentExecutionTarget(input: {
   db: Db;
   companyId: string;
@@ -53,7 +55,7 @@ export async function resolveEnvironmentExecutionTarget(input: {
     const remoteCwd =
       typeof input.leaseMetadata?.remoteCwd === "string" && input.leaseMetadata.remoteCwd.trim().length > 0
         ? input.leaseMetadata.remoteCwd.trim()
-        : "/";
+        : DEFAULT_SANDBOX_REMOTE_CWD;
     const timeoutMs = "timeoutMs" in parsed.config ? parsed.config.timeoutMs : null;
     const paperclipApiUrl =
       typeof input.leaseMetadata?.paperclipApiUrl === "string" && input.leaseMetadata.paperclipApiUrl.trim().length > 0

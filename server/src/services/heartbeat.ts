@@ -364,6 +364,26 @@ export function applyPersistedExecutionWorkspaceConfig(input: {
   return nextConfig;
 }
 
+export function mergeExecutionWorkspaceMetadataForPersistence(input: {
+  existingMetadata: Record<string, unknown> | null | undefined;
+  source: string;
+  createdByRuntime: boolean;
+  configSnapshot: Record<string, unknown> | null;
+  shouldReuseExisting: boolean;
+}) {
+  const base = {
+    ...(input.existingMetadata ?? {}),
+    source: input.source,
+    createdByRuntime: input.createdByRuntime,
+  } as Record<string, unknown>;
+
+  if (input.shouldReuseExisting || !input.configSnapshot) {
+    return base;
+  }
+
+  return mergeExecutionWorkspaceConfig(base, input.configSnapshot);
+}
+
 export function stripWorkspaceRuntimeFromExecutionRunConfig(config: Record<string, unknown>) {
   const nextConfig = { ...config };
   delete nextConfig.workspaceRuntime;
@@ -5157,7 +5177,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       issueRef?.executionWorkspaceId ? await executionWorkspacesSvc.getById(issueRef.executionWorkspaceId) : null;
     const shouldReuseExisting =
       issueRef?.executionWorkspacePreference === "reuse_existing" &&
-      existingExecutionWorkspace &&
+      existingExecutionWorkspace !== null &&
       existingExecutionWorkspace.status !== "archived";
     const persistedExecutionWorkspaceMode = shouldReuseExisting && existingExecutionWorkspace
       ? issueExecutionWorkspaceModeForPersistedWorkspace(existingExecutionWorkspace.mode)
@@ -5248,14 +5268,13 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     const resolvedProjectId = executionWorkspace.projectId ?? issueRef?.projectId ?? executionProjectId ?? null;
     const resolvedProjectWorkspaceId = issueRef?.projectWorkspaceId ?? resolvedWorkspace.workspaceId ?? null;
     let persistedExecutionWorkspace = null;
-    const nextExecutionWorkspaceMetadataBase = {
-      ...(existingExecutionWorkspace?.metadata ?? {}),
+    const nextExecutionWorkspaceMetadata = mergeExecutionWorkspaceMetadataForPersistence({
+      existingMetadata: existingExecutionWorkspace?.metadata ?? null,
       source: executionWorkspace.source,
       createdByRuntime: executionWorkspace.created,
-    } as Record<string, unknown>;
-    const nextExecutionWorkspaceMetadata = configSnapshot
-      ? mergeExecutionWorkspaceConfig(nextExecutionWorkspaceMetadataBase, configSnapshot)
-      : nextExecutionWorkspaceMetadataBase;
+      configSnapshot,
+      shouldReuseExisting,
+    });
     try {
       persistedExecutionWorkspace = shouldReuseExisting && existingExecutionWorkspace
         ? await executionWorkspacesSvc.update(existingExecutionWorkspace.id, {

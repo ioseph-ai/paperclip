@@ -35,6 +35,8 @@ interface FakeLeaseState {
 }
 
 const leases = new Map<string, FakeLeaseState>();
+const DEFAULT_FAKE_SANDBOX_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+const FAKE_SANDBOX_SIGKILL_GRACE_MS = 250;
 
 function parseConfig(raw: Record<string, unknown>): FakeDriverConfig {
   return {
@@ -88,7 +90,7 @@ function buildCommandLine(command: string, args: string[] | undefined): string {
 
 function buildCommandEnvironment(explicitEnv: Record<string, string> | undefined): Record<string, string> {
   return {
-    PATH: explicitEnv?.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin",
+    PATH: explicitEnv?.PATH ?? DEFAULT_FAKE_SANDBOX_PATH,
     ...(explicitEnv ?? {}),
   };
 }
@@ -107,10 +109,14 @@ async function runCommand(params: PluginEnvironmentExecuteParams, timeoutMs: num
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let killTimer: NodeJS.Timeout | null = null;
     const timer = timeoutMs > 0
       ? setTimeout(() => {
           timedOut = true;
           child.kill("SIGTERM");
+          killTimer = setTimeout(() => {
+            child.kill("SIGKILL");
+          }, FAKE_SANDBOX_SIGKILL_GRACE_MS);
         }, timeoutMs)
       : null;
 
@@ -122,10 +128,12 @@ async function runCommand(params: PluginEnvironmentExecuteParams, timeoutMs: num
     });
     child.on("error", (error) => {
       if (timer) clearTimeout(timer);
+      if (killTimer) clearTimeout(killTimer);
       reject(error);
     });
     child.on("close", (code, signal) => {
       if (timer) clearTimeout(timer);
+      if (killTimer) clearTimeout(killTimer);
       resolve({
         exitCode: timedOut ? null : code,
         signal,

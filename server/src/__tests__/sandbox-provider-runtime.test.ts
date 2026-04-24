@@ -128,6 +128,24 @@ describe("sandbox provider runtime", () => {
     });
   });
 
+  it("reconstructs plugin-backed sandbox config from lease metadata for runtime recovery", () => {
+    const metadata = {
+      provider: "fake-plugin",
+      reuseLease: true,
+      timeoutMs: 45_000,
+      remoteCwd: "/workspace/project",
+      fakeRootDir: "/tmp/fake-root",
+    };
+
+    expect(sandboxConfigFromLeaseMetadataLoose({ metadata })).toEqual({
+      provider: "fake-plugin",
+      reuseLease: true,
+      timeoutMs: 45_000,
+      remoteCwd: "/workspace/project",
+      fakeRootDir: "/tmp/fake-root",
+    });
+  });
+
   it("releases fake leases without external side effects", async () => {
     await expect(releaseSandboxProviderLease({
       config: {
