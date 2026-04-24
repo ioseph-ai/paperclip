@@ -22,6 +22,10 @@ const mdxEditorMockState = vi.hoisted(() => ({
   suppressHtmlProcessingValues: [] as boolean[],
 }));
 
+function containsHtmlLikeTag(markdown: string) {
+  return /<\/?[A-Za-z][A-Za-z0-9:-]*(?:\s[^>]*)?\/?>/.test(markdown);
+}
+
 vi.mock("@mdxeditor/editor", async () => {
   const React = await import("react");
 
@@ -63,7 +67,7 @@ vi.mock("@mdxeditor/editor", async () => {
     }), []);
 
     React.useEffect(() => {
-      if (!suppressHtmlProcessing && (markdown.includes("<img ") || markdown.includes("<gpt>"))) {
+      if (!suppressHtmlProcessing && containsHtmlLikeTag(markdown)) {
         setContent("");
         onError?.({
           error: "Error parsing markdown: HTML-like formatting requires suppressHtmlProcessing",
@@ -271,13 +275,13 @@ describe("MarkdownEditor", () => {
     });
   });
 
-  it("keeps LLM wrapper tags in the rich editor instead of falling back to raw source", async () => {
+  it("keeps arbitrary HTML-like tags in the rich editor instead of falling back to raw source", async () => {
     const root = createRoot(container);
 
     await act(async () => {
       root.render(
         <MarkdownEditor
-          value={"<gpt>\n## My take\n\nBenchmark notes\n</gpt>"}
+          value={'<section data-source="paste">\n## My take\n\n<p>Benchmark notes</p>\n</section>'}
           onChange={() => {}}
           placeholder="Markdown body"
         />,
