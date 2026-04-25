@@ -236,6 +236,35 @@ describe("E2B sandbox provider plugin", () => {
     });
   });
 
+  it("closes stdin even when sendStdin throws unexpectedly", async () => {
+    const sandbox = createMockSandbox();
+    const failure = new Error("send failed");
+    sandbox.commands.sendStdin.mockRejectedValueOnce(failure);
+    mockConnect.mockResolvedValue(sandbox);
+
+    await expect(plugin.definition.onEnvironmentExecute?.({
+      driverKey: "e2b",
+      companyId: "company-1",
+      environmentId: "env-1",
+      config: {
+        template: "base",
+        apiKey: "resolved-key",
+        timeoutMs: 300000,
+        reuseLease: false,
+      },
+      lease: { providerLeaseId: "sandbox-123", metadata: {} },
+      command: "printf",
+      args: ["hello"],
+      cwd: "/workspace",
+      env: { FOO: "bar" },
+      stdin: "input",
+      timeoutMs: 1000,
+    })).rejects.toThrow("send failed");
+
+    expect(sandbox.commands.closeStdin).toHaveBeenCalledWith(42);
+    expect(sandbox.handle.wait).not.toHaveBeenCalled();
+  });
+
   it("pauses reusable leases and kills ephemeral leases on release", async () => {
     const reusable = createMockSandbox({ sandboxId: "sandbox-reusable" });
     const ephemeral = createMockSandbox({ sandboxId: "sandbox-ephemeral" });

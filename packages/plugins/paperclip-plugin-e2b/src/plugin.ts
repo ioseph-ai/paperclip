@@ -125,7 +125,7 @@ const plugin = definePlugin({
     if (typeof params.config.template === "string" && params.config.template.trim().length === 0) {
       errors.push("E2B sandbox environments require a template.");
     }
-    if (!Number.isInteger(config.timeoutMs) || config.timeoutMs < 1 || config.timeoutMs > 86_400_000) {
+    if (config.timeoutMs < 1 || config.timeoutMs > 86_400_000) {
       errors.push("timeoutMs must be between 1 and 86400000.");
     }
 
@@ -291,8 +291,11 @@ const plugin = definePlugin({
 
     try {
       if (params.stdin != null) {
-        await sandbox.commands.sendStdin(started.pid, params.stdin);
-        await sandbox.commands.closeStdin(started.pid);
+        try {
+          await sandbox.commands.sendStdin(started.pid, params.stdin);
+        } finally {
+          await sandbox.commands.closeStdin(started.pid);
+        }
       }
       const result = await started.wait();
       return {
