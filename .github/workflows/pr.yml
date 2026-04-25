@@ -60,9 +60,19 @@ jobs:
             exit 1
           fi
 
+          sandbox_provider_glob_copy_pattern='^COPY --parents packages/plugins/sandbox-providers/\./\*/package\.json packages/plugins/sandbox-providers/?$'
+          if echo "$deps_stage" | grep -Eq "$sandbox_provider_glob_copy_pattern"; then
+            sandbox_provider_glob_copy_present=1
+          else
+            sandbox_provider_glob_copy_present=0
+          fi
+
           # Check all workspace package.json files are copied in the deps stage
           for pkg in $(find $search_roots -maxdepth 2 -name package.json -not -path '*/examples/*' -not -path '*/create-paperclip-plugin/*' -not -path '*/node_modules/*' 2>/dev/null | sort -u); do
             dir="$(dirname "$pkg")"
+            if [ "$sandbox_provider_glob_copy_present" -eq 1 ] && printf '%s\n' "$pkg" | grep -Eq '^packages/plugins/sandbox-providers/[^/]+/package\.json$'; then
+              continue
+            fi
             if ! echo "$deps_stage" | grep -q "^COPY ${dir}/package.json"; then
               echo "::error::Dockerfile deps stage missing: COPY ${pkg} ${dir}/"
               missing=1
