@@ -237,13 +237,18 @@ const plugin = definePlugin({
     const config = parseDriverConfig(params.config);
     try {
       const sandbox = await connectSandbox(config, params.providerLeaseId);
-      await sandbox.setTimeout(config.timeoutMs);
-      const remoteCwd = await resolveSandboxWorkingDirectory(sandbox);
+      try {
+        await sandbox.setTimeout(config.timeoutMs);
+        const remoteCwd = await resolveSandboxWorkingDirectory(sandbox);
 
-      return {
-        providerLeaseId: sandbox.sandboxId,
-        metadata: leaseMetadata({ config, sandbox, remoteCwd, resumedLease: true }),
-      };
+        return {
+          providerLeaseId: sandbox.sandboxId,
+          metadata: leaseMetadata({ config, sandbox, remoteCwd, resumedLease: true }),
+        };
+      } catch (error) {
+        await sandbox.kill().catch(() => undefined);
+        throw error;
+      }
     } catch (error) {
       if (error instanceof SandboxNotFoundError) {
         return { providerLeaseId: null, metadata: { expired: true } };

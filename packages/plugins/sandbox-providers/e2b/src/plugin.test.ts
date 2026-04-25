@@ -205,6 +205,29 @@ describe("E2B sandbox provider plugin", () => {
     expect(mockCreate).toHaveBeenCalledWith("base", expect.objectContaining({ apiKey: "host-key" }));
   });
 
+  it("kills the sandbox if resume setup fails after reconnect", async () => {
+    const sandbox = createMockSandbox();
+    const failure = new Error("set-timeout failed");
+    sandbox.setTimeout.mockRejectedValueOnce(failure);
+    mockConnect.mockResolvedValue(sandbox);
+
+    await expect(plugin.definition.onEnvironmentResumeLease?.({
+      driverKey: "e2b",
+      companyId: "company-1",
+      environmentId: "env-1",
+      runId: "run-1",
+      providerLeaseId: "sandbox-123",
+      config: {
+        template: "base",
+        apiKey: "resolved-key",
+        timeoutMs: 300000,
+        reuseLease: false,
+      },
+    })).rejects.toThrow("set-timeout failed");
+
+    expect(sandbox.kill).toHaveBeenCalled();
+  });
+
   it("executes commands through a connected sandbox", async () => {
     const sandbox = createMockSandbox();
     mockConnect.mockResolvedValue(sandbox);
