@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -29,6 +29,10 @@ function parseWorkspaceRoots(workspaceText) {
   return workspaceText
     .split("\n")
     .map((line) => line.match(/^\s*-\s+(.+)\s*$/)?.[1]?.trim() ?? null)
+    .map((entry) => {
+      if (!entry) return entry;
+      return entry.replace(/^(['"])(.*)\1$/, "$2");
+    })
     .filter(Boolean)
     .filter((entry) => !entry.startsWith("!"))
     .map((entry) => entry.replace(/\*+$/, ""))
