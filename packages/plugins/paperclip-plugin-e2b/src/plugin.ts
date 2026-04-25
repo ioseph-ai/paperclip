@@ -32,7 +32,7 @@ function parseDriverConfig(raw: Record<string, unknown>): E2bDriverConfig {
   return {
     template,
     apiKey: typeof raw.apiKey === "string" && raw.apiKey.trim().length > 0 ? raw.apiKey.trim() : null,
-    timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : 300_000,
+    timeoutMs: Number.isFinite(timeoutMs) ? Math.trunc(timeoutMs) : 300_000,
     reuseLease: raw.reuseLease === true,
   };
 }
@@ -56,9 +56,7 @@ async function createSandbox(config: E2bDriverConfig): Promise<Sandbox> {
       paperclipProvider: "e2b",
     },
   };
-  return config.template === "base"
-    ? await Sandbox.create(options)
-    : await Sandbox.create(config.template, options);
+  return await Sandbox.create(config.template, options);
 }
 
 async function resolveSandboxWorkingDirectory(sandbox: Sandbox): Promise<string> {
@@ -124,7 +122,7 @@ const plugin = definePlugin({
     const config = parseDriverConfig(params.config);
     const errors: string[] = [];
 
-    if (config.template.length === 0) {
+    if (typeof params.config.template === "string" && params.config.template.trim().length === 0) {
       errors.push("E2B sandbox environments require a template.");
     }
     if (!Number.isInteger(config.timeoutMs) || config.timeoutMs < 1 || config.timeoutMs > 86_400_000) {
@@ -187,13 +185,18 @@ const plugin = definePlugin({
   ): Promise<PluginEnvironmentLease> {
     const config = parseDriverConfig(params.config);
     const sandbox = await createSandbox(config);
-    await sandbox.setTimeout(config.timeoutMs);
-    const remoteCwd = await resolveSandboxWorkingDirectory(sandbox);
+    try {
+      await sandbox.setTimeout(config.timeoutMs);
+      const remoteCwd = await resolveSandboxWorkingDirectory(sandbox);
 
-    return {
-      providerLeaseId: sandbox.sandboxId,
-      metadata: leaseMetadata({ config, sandbox, remoteCwd, resumedLease: false }),
-    };
+      return {
+        providerLeaseId: sandbox.sandboxId,
+        metadata: leaseMetadata({ config, sandbox, remoteCwd, resumedLease: false }),
+      };
+    } catch (error) {
+      await sandbox.kill().catch(() => undefined);
+      throw error;
+    }
   },
 
   async onEnvironmentResumeLease(

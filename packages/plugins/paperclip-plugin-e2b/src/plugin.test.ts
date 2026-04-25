@@ -92,7 +92,7 @@ describe("E2B sandbox provider plugin", () => {
       config: {
         template: "  base  ",
         apiKey: "  e2b_test_key  ",
-        timeoutMs: "450000",
+        timeoutMs: "450000.9",
         reuseLease: true,
       },
     });
@@ -105,6 +105,18 @@ describe("E2B sandbox provider plugin", () => {
         timeoutMs: 450000,
         reuseLease: true,
       },
+    });
+  });
+
+  it("rejects empty template strings instead of silently normalizing them", async () => {
+    await expect(plugin.definition.onEnvironmentValidateConfig?.({
+      driverKey: "e2b",
+      config: {
+        template: "   ",
+      },
+    })).resolves.toEqual({
+      ok: false,
+      errors: ["E2B sandbox environments require a template."],
     });
   });
 
@@ -126,7 +138,7 @@ describe("E2B sandbox provider plugin", () => {
       },
     });
 
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockCreate).toHaveBeenCalledWith("base", expect.objectContaining({
       apiKey: "resolved-key",
       timeoutMs: 300000,
     }));
@@ -137,6 +149,28 @@ describe("E2B sandbox provider plugin", () => {
         remoteCwd: "/home/user/paperclip-workspace",
       },
     });
+  });
+
+  it("kills the sandbox if acquire setup fails after creation", async () => {
+    const sandbox = createMockSandbox();
+    const failure = new Error("set-timeout failed");
+    sandbox.setTimeout.mockRejectedValueOnce(failure);
+    mockCreate.mockResolvedValue(sandbox);
+
+    await expect(plugin.definition.onEnvironmentAcquireLease?.({
+      driverKey: "e2b",
+      companyId: "company-1",
+      environmentId: "env-1",
+      runId: "run-1",
+      config: {
+        template: "base",
+        apiKey: "resolved-key",
+        timeoutMs: 300000,
+        reuseLease: false,
+      },
+    })).rejects.toThrow("set-timeout failed");
+
+    expect(sandbox.kill).toHaveBeenCalled();
   });
 
   it("falls back to host E2B_API_KEY when config omits the API key", async () => {
@@ -158,7 +192,7 @@ describe("E2B sandbox provider plugin", () => {
     })).resolves.toMatchObject({
       providerLeaseId: "sandbox-123",
     });
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ apiKey: "host-key" }));
+    expect(mockCreate).toHaveBeenCalledWith("base", expect.objectContaining({ apiKey: "host-key" }));
   });
 
   it("executes commands through a connected sandbox", async () => {
