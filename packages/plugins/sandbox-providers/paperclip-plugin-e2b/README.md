@@ -17,7 +17,7 @@ The host plugin installer runs `npm install` into the managed plugin directory, 
 ## Local development
 
 ```bash
-cd packages/plugins/paperclip-plugin-e2b
+cd packages/plugins/sandbox-providers/paperclip-plugin-e2b
 pnpm install --ignore-workspace --no-lockfile
 pnpm build
 pnpm test

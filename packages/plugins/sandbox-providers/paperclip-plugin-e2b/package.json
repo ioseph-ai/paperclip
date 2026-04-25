@@ -10,7 +10,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/paperclipai/paperclip",
-    "directory": "packages/plugins/paperclip-plugin-e2b"
+    "directory": "packages/plugins/sandbox-providers/paperclip-plugin-e2b"
   },
   "type": "module",
   "exports": {
@@ -41,13 +41,13 @@
     "e2b"
   ],
   "scripts": {
-    "postinstall": "node ../../../scripts/link-plugin-e2b-dev-sdk.mjs",
-    "prebuild": "pnpm -C ../../.. --filter @paperclipai/plugin-sdk build",
+    "postinstall": "node ../../../../scripts/link-plugin-e2b-dev-sdk.mjs",
+    "prebuild": "pnpm -C ../../../.. --filter @paperclipai/plugin-sdk build",
     "build": "rm -rf dist && tsc",
     "clean": "rm -rf dist",
-    "typecheck": "pnpm -C ../../.. --filter @paperclipai/plugin-sdk build && tsc --noEmit",
+    "typecheck": "pnpm -C ../../../.. --filter @paperclipai/plugin-sdk build && tsc --noEmit",
     "test": "vitest run --config vitest.config.ts",
-    "prepack": "rm -f package.dev.json && cp package.json package.dev.json && node ../../../scripts/generate-plugin-e2b-package-json.mjs",
+    "prepack": "rm -f package.dev.json && cp package.json package.dev.json && node ../../../../scripts/generate-plugin-e2b-package-json.mjs",
     "postpack": "if [ -f package.dev.json ]; then mv package.dev.json package.json; fi"
   },
   "dependencies": {

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
-const packageDir = join(repoRoot, "packages", "plugins", "paperclip-plugin-e2b");
+const packageDir = join(repoRoot, "packages", "plugins", "sandbox-providers", "paperclip-plugin-e2b");
 const sdkDir = join(repoRoot, "packages", "plugins", "sdk");
 const scopeDir = join(packageDir, "node_modules", "@paperclipai");
 const linkTarget = join(scopeDir, "plugin-sdk");
