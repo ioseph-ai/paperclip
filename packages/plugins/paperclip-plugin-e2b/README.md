@@ -2,7 +2,7 @@
 
 Published E2B sandbox provider plugin for Paperclip.
 
-This package lives in the Paperclip monorepo, but it is shaped to publish and install like a standalone npm package. That means operators can install it from the Plugins page by package name, and the host will fetch its transitive dependencies at install time.
+This package lives in the Paperclip monorepo, but it is intentionally excluded from the root `pnpm` workspace and shaped to publish and install like a standalone npm package. That means operators can install it from the Plugins page by package name, and the host will fetch its transitive dependencies at install time without adding lockfile churn to the Paperclip repo.
 
 ## Install
 
@@ -17,10 +17,14 @@ The host plugin installer runs `npm install` into the managed plugin directory, 
 ## Local development
 
 ```bash
-pnpm --filter @paperclipai/plugin-e2b build
-pnpm --filter @paperclipai/plugin-e2b test
-pnpm --filter @paperclipai/plugin-e2b typecheck
+cd packages/plugins/paperclip-plugin-e2b
+pnpm install --ignore-workspace --no-lockfile
+pnpm build
+pnpm test
+pnpm typecheck
 ```
+
+These commands assume the repo root has already been installed once so the local `@paperclipai/plugin-sdk` workspace package is available to the compiler during development.
 
 ## Package layout
 

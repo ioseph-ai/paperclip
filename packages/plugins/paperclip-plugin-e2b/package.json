@@ -41,14 +41,16 @@
     "e2b"
   ],
   "scripts": {
-    "prebuild": "node ../../../scripts/ensure-plugin-build-deps.mjs",
+    "postinstall": "node ../../../scripts/link-plugin-e2b-dev-sdk.mjs",
+    "prebuild": "pnpm -C ../../.. --filter @paperclipai/plugin-sdk build",
     "build": "rm -rf dist && tsc",
     "clean": "rm -rf dist",
-    "typecheck": "pnpm --filter @paperclipai/plugin-sdk build && tsc --noEmit",
-    "test": "vitest run --config vitest.config.ts"
+    "typecheck": "pnpm -C ../../.. --filter @paperclipai/plugin-sdk build && tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts",
+    "prepack": "rm -f package.dev.json && cp package.json package.dev.json && node ../../../scripts/generate-plugin-e2b-package-json.mjs",
+    "postpack": "if [ -f package.dev.json ]; then mv package.dev.json package.json; fi"
   },
   "dependencies": {
-    "@paperclipai/plugin-sdk": "workspace:*",
     "e2b": "^2.19.0"
   },
   "devDependencies": {
