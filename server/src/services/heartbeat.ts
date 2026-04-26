@@ -2079,7 +2079,6 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         executionWorkspaceId: issues.executionWorkspaceId,
         executionWorkspacePreference: issues.executionWorkspacePreference,
         assigneeAgentId: issues.assigneeAgentId,
-        checkoutRunId: issues.checkoutRunId,
         assigneeAdapterOverrides: issues.assigneeAdapterOverrides,
         executionWorkspaceSettings: issues.executionWorkspaceSettings,
       })
@@ -4645,26 +4644,8 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       })
     ) {
       try {
-        const shouldRecordHarnessCheckout =
-          issueContext.status !== "in_progress" || issueContext.checkoutRunId !== run.id;
-        const checkedOutIssue = await issuesSvc.checkout(issueId, agent.id, ["todo", "backlog", "blocked"], run.id);
+        await issuesSvc.checkout(issueId, agent.id, ["todo", "backlog", "blocked"], run.id);
         context[PAPERCLIP_HARNESS_CHECKOUT_KEY] = true;
-        if (shouldRecordHarnessCheckout && checkedOutIssue.checkoutRunId === run.id) {
-          await logActivity(db, {
-            companyId: checkedOutIssue.companyId,
-            actorType: "agent",
-            actorId: agent.id,
-            agentId: agent.id,
-            runId: run.id,
-            action: "issue.checked_out",
-            entityType: "issue",
-            entityId: issueId,
-            details: {
-              agentId: agent.id,
-              source: "heartbeat.auto_checkout",
-            },
-          });
-        }
       } catch (error) {
         if (!isCheckoutConflictError(error)) throw error;
         context[PAPERCLIP_HARNESS_CHECKOUT_KEY] = false;
