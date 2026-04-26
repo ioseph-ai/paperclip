@@ -56,6 +56,10 @@ Three new tests in `issues-service.test.ts`:
 2. `pruneResolvedBlockers resolves dependency readiness when all blockers are done` — verifies full prune cleans edges
 3. `pruneResolvedBlockers is idempotent when no blockers are done` — verifies no-op when nothing to prune
 
+## Related Issues
+
+- **MON-335** (child): Bug — non-assignee comments on blocked issues trigger automatic reopen. This is a related but distinct systemic issue: the comment-reopen path (`issue_reopened_via_comment` wake) does not distinguish between dependency-blocked and executive-blocked issues. A well-intentioned comment on a CEO/CTO-blocked issue can undo the block decision. MON-335 tracks the fix; it is independent of MON-307's merge.
+
 ## Files Changed
 
 - `server/src/services/heartbeat.ts` — Preflight prune in `claimQueuedRun` and heartbeat wake path
