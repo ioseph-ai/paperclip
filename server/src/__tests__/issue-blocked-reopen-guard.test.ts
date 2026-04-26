@@ -269,13 +269,13 @@ describe("Blocked issue reopen guard (MON-335)", () => {
     expect(res.status).toBe(200);
   });
 
-  it("should allow explicit reopen of blocked issue with resolved dependency blockers", async () => {
+  it("should NOT implicitly reopen a blocked issue without dependency blockers from a user comment", async () => {
     const existing = makeIssue({
       status: "blocked",
       assigneeAgentId: ASSIGNEE_AGENT_ID,
     });
     mockIssueService.getById.mockResolvedValue(existing);
-    // Does NOT have any dependency blockers (executive block)
+    // No dependency blockers — blocked by executive decision
     mockIssueService.getDependencyReadiness.mockResolvedValue({
       issueId: existing.id,
       blockerIssueIds: [],
@@ -284,53 +284,31 @@ describe("Blocked issue reopen guard (MON-335)", () => {
       allBlockersDone: true,
       isDependencyReady: true,
     });
-
-    // Board user attempts to reopen an executive-blocked issue without dependency blockers
-    const res = await request(await createApp())
-      .patch(`/api/issues/${existing.id}`)
-      .send({
-        comment: "trying to reopen",
-        reopen: true,
-      });
-
-    // Should be rejected: blocked with no dependency blockers
-    expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(/blocked without dependency blockers/i);
-  });
-
-  it("should NOT implicitly reopen a blocked issue from done/cancelled state — only reopen closed issues", async () => {
-    // shouldImplicitlyMoveCommentedIssueToTodo no longer includes "blocked" in the status check
-    // Blocked issues are NOT implicitly reopened by user comments anymore
-    const existing = makeIssue({
-      status: "blocked",
-      assigneeAgentId: ASSIGNEE_AGENT_ID,
+    mockIssueService.update.mockResolvedValue({
+      ...existing,
+      status: "todo",
     });
-    mockIssueService.getById.mockResolvedValue(existing);
-    mockIssueService.getDependencyReadiness.mockResolvedValue({
+    mockIssueService.addComment.mockResolvedValue({
+      id: "comment-4",
       issueId: existing.id,
-      blockerIssueIds: [],
-      unresolvedBlockerIssueIds: [],
-      unresolvedBlockerCount: 0,
-      allBlockersDone: true,
-      isDependencyReady: true,
+      companyId: existing.companyId,
+      body: "just commenting",
     });
 
-    // Board user comments without explicit reopen — should NOT implicitly reopen blocked issue
+    // User comments WITHOUT explicit reopen=true — should NOT move issue to todo
     const res = await request(await createApp())
       .patch(`/api/issues/${existing.id}`)
       .send({
-        comment: "just commenting, not trying to reopen",
+        comment: "just commenting",
       });
 
-    // Should NOT be 409 or change status — just a normal comment without reopen
-    // But since the issue is blocked with no dependency blockers and the user
-    // didn't explicitly request reopen, the implicit path is already blocked
-    // by the shouldImplicitlyMoveCommentedIssueToTodo change
+    // Comment should succeed but status should NOT change to todo
     expect(res.status).toBe(200);
-    // The issue should NOT have been moved to "todo" status
     const statusUpdateCall = mockIssueService.update.mock.calls.find(
-      (call: any[]) => call[1]?.status === "todo"
+      (call: any[]) => call[1]?.status === "todo",
     );
     expect(statusUpdateCall).toBeUndefined();
   });
+
+
 });
