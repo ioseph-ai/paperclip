@@ -165,6 +165,13 @@ export type IssueDependencyReadiness = {
   allBlockersDone: boolean;
   isDependencyReady: boolean;
 };
+export type ResolvedBlockerPruneResult = {
+  issueId: string;
+  companyId: string;
+  blockedByIssueIds: string[];
+  remainingBlockedByIssueIds: string[];
+  removedBlockedByIssueIds: string[];
+};
 export type ChildIssueCompletionSummary = {
   id: string;
   identifier: string | null;
@@ -1704,6 +1711,68 @@ export function issueService(db: Db) {
     );
   }
 
+  async function pruneResolvedBlockersForIssue(
+    issueId: string,
+    actor: { agentId?: string | null; userId?: string | null } = {},
+    dbOrTx: any = db,
+  ): Promise<ResolvedBlockerPruneResult> {
+    const runPrune = async (tx: any) => {
+      await tx.execute(
+        sql`select ${issues.id} from ${issues} where ${issues.id} = ${issueId} for update`,
+      );
+
+      const issue = await tx
+        .select({ id: issues.id, companyId: issues.companyId })
+        .from(issues)
+        .where(eq(issues.id, issueId))
+        .then((rows: Array<{ id: string; companyId: string }>) => rows[0] ?? null);
+      if (!issue) throw notFound("Issue not found");
+
+      const blockerRows = await tx
+        .select({
+          blockerIssueId: issueRelations.issueId,
+          blockerStatus: issues.status,
+        })
+        .from(issueRelations)
+        .innerJoin(issues, eq(issueRelations.issueId, issues.id))
+        .where(
+          and(
+            eq(issueRelations.companyId, issue.companyId),
+            eq(issueRelations.type, "blocks"),
+            eq(issueRelations.relatedIssueId, issueId),
+          ),
+        );
+
+      const blockedByIssueIds = blockerRows.map((row: { blockerIssueId: string }) => row.blockerIssueId);
+      const remainingBlockedByIssueIds = blockerRows
+        .filter((row: { blockerStatus: string }) => row.blockerStatus !== "done")
+        .map((row: { blockerIssueId: string }) => row.blockerIssueId);
+      const removedBlockedByIssueIds = blockerRows
+        .filter((row: { blockerStatus: string }) => row.blockerStatus === "done")
+        .map((row: { blockerIssueId: string }) => row.blockerIssueId);
+
+      if (removedBlockedByIssueIds.length > 0) {
+        await syncBlockedByIssueIds(
+          issueId,
+          issue.companyId,
+          remainingBlockedByIssueIds,
+          actor,
+          tx,
+        );
+      }
+
+      return {
+        issueId,
+        companyId: issue.companyId,
+        blockedByIssueIds,
+        remainingBlockedByIssueIds,
+        removedBlockedByIssueIds,
+      };
+    };
+
+    return dbOrTx === db ? db.transaction(runPrune) : runPrune(dbOrTx);
+  }
+
   async function isTerminalOrMissingHeartbeatRun(runId: string) {
     const run = await db
       .select({ status: heartbeatRuns.status })
@@ -2162,6 +2231,12 @@ export function issueService(db: Db) {
     listDependencyReadiness: async (companyId: string, issueIds: string[], dbOrTx: any = db) => {
       return listIssueDependencyReadinessMap(dbOrTx, companyId, issueIds);
     },
+
+    pruneResolvedBlockers: async (
+      issueId: string,
+      actor: { agentId?: string | null; userId?: string | null } = {},
+      dbOrTx: any = db,
+    ) => pruneResolvedBlockersForIssue(issueId, actor, dbOrTx),
 
     listBlockerAttention: async (
       companyId: string,
